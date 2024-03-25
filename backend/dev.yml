@@ -1,0 +1,6 @@
+server:
+  PORT: 80
+
+audiobooks:
+  DATA_DIR: "/home/memi/projects/bookplayer/data"
+  INTERVAL: 5000

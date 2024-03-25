@@ -1,0 +1,104 @@
+package directorywatcher_test
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	config "github.com/bongofriend/backend/lib"
+	directorywatcher "github.com/bongofriend/backend/lib/processing"
+)
+
+func TestDirectoryWatcherObserve(t *testing.T) {
+	watcher := directorywatcher.DirectoryWatcher{}
+	context, cancel := context.WithCancel(context.Background())
+	testConfig := config.AudiobooksConfig{
+		AudibookDirectoryPath: t.TempDir(),
+		Interval:              2 * time.Second,
+	}
+	var wg *sync.WaitGroup = &sync.WaitGroup{}
+
+	wg.Add(1)
+	err := watcher.Start(context, wg, testConfig)
+	if err != nil {
+		wg.Done()
+		t.Fatal(err)
+	}
+	testFileName := "test.txt"
+	testFileContent := "Hello from TestFile!"
+	testFilePath := filepath.Join(testConfig.AudibookDirectoryPath, testFileName)
+	expectedFilePathReceived := false
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		select {
+		case <-context.Done():
+			return
+		case p := <-watcher.PathChan:
+			if p == testFilePath {
+				expectedFilePathReceived = true
+			}
+		}
+
+	}()
+
+	os.WriteFile(testFilePath, []byte(testFileContent), 0666)
+	time.Sleep(testConfig.Interval * 2)
+	cancel()
+	wg.Wait()
+	if !expectedFilePathReceived {
+		t.Fatal("Expected test file path not received")
+	}
+}
+
+func TestDirectoryWatcherUniqueFiles(t *testing.T) {
+	watcher := directorywatcher.DirectoryWatcher{}
+	context, cancel := context.WithCancel(context.Background())
+	testConfig := config.AudiobooksConfig{
+		AudibookDirectoryPath: t.TempDir(),
+		Interval:              2 * time.Second,
+	}
+	var wg *sync.WaitGroup = &sync.WaitGroup{}
+
+	wg.Add(1)
+	err := watcher.Start(context, wg, testConfig)
+	if err != nil {
+		wg.Done()
+		t.Fatal(err)
+	}
+
+	testFileName := "test.txt"
+	testFilePath := filepath.Join(testConfig.AudibookDirectoryPath, testFileName)
+	filePathReceivedCount := 0
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-context.Done():
+				return
+			case p := <-watcher.PathChan:
+				if p == testFilePath {
+					filePathReceivedCount += 1
+				}
+			}
+		}
+	}()
+
+	os.WriteFile(testFilePath, []byte("Hello"), 0666)
+	time.Sleep(2 * testConfig.Interval)
+	os.WriteFile(testFilePath, []byte("World"), 0666)
+	time.Sleep(2 * testConfig.Interval)
+
+	cancel()
+	wg.Wait()
+
+	if filePathReceivedCount != 3 {
+		t.Fatal("Received file unexpected number of files")
+	}
+}

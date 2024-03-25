@@ -13,7 +13,7 @@ import (
 )
 
 func TestDirectoryWatcherObserve(t *testing.T) {
-	watcher := directorywatcher.DirectoryWatcher{}
+	watcher := directorywatcher.NewDirectoryWatcher()
 	context, cancel := context.WithCancel(context.Background())
 	testConfig := config.AudiobooksConfig{
 		AudibookDirectoryPath: t.TempDir(),
@@ -56,7 +56,7 @@ func TestDirectoryWatcherObserve(t *testing.T) {
 }
 
 func TestDirectoryWatcherUniqueFiles(t *testing.T) {
-	watcher := directorywatcher.DirectoryWatcher{}
+	watcher := directorywatcher.NewDirectoryWatcher()
 	context, cancel := context.WithCancel(context.Background())
 	testConfig := config.AudiobooksConfig{
 		AudibookDirectoryPath: t.TempDir(),
@@ -90,15 +90,16 @@ func TestDirectoryWatcherUniqueFiles(t *testing.T) {
 		}
 	}()
 
-	os.WriteFile(testFilePath, []byte("Hello"), 0666)
-	time.Sleep(2 * testConfig.Interval)
-	os.WriteFile(testFilePath, []byte("World"), 0666)
-	time.Sleep(2 * testConfig.Interval)
+	textToWrite := []string{"Hello", "Hello", "World"}
+	for _, text := range textToWrite {
+		os.WriteFile(testFilePath, []byte(text), 0644)
+		time.Sleep(2 * testConfig.Interval)
+	}
 
 	cancel()
 	wg.Wait()
 
-	if filePathReceivedCount != 3 {
-		t.Fatal("Received file unexpected number of files")
+	if filePathReceivedCount != 2 {
+		t.Fatal("Received unexpected number of files")
 	}
 }

@@ -1,4 +1,4 @@
-module github.com/bongofriend/backend
+module github.com/bongofriend/bookplayer/backend
 
 go 1.22.0
 

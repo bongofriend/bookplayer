@@ -3,4 +3,4 @@ server:
 
 audiobooks:
   DATA_DIR: "/home/memi/projects/bookplayer/data"
-  INTERVAL: 5000
+  INTERVAL: 5m

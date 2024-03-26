@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	config "github.com/bongofriend/backend/lib"
+	config "github.com/bongofriend/bookplayer/backend/lib"
 )
 
 type DirectoryWatcher struct {
@@ -85,12 +85,13 @@ func (d DirectoryWatcher) Start(ctx context.Context, wg *sync.WaitGroup, c confi
 	d.load()
 	ticker := time.NewTicker(c.Interval)
 	log.Printf("Watching %s ...", c.AudibookDirectoryPath)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for {
 			select {
 			case <-ctx.Done():
 				d.shutdown(c)
-				wg.Done()
 				return
 			case <-ticker.C:
 				d.parseDirectoryContent(c)

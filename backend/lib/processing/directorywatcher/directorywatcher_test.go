@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	config "github.com/bongofriend/backend/lib"
-	directorywatcher "github.com/bongofriend/backend/lib/processing"
+	config "github.com/bongofriend/bookplayer/backend/lib"
+	"github.com/bongofriend/bookplayer/backend/lib/processing/directorywatcher"
 )
 
 func TestDirectoryWatcherObserve(t *testing.T) {

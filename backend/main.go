@@ -8,26 +8,31 @@ import (
 	"sync"
 	"syscall"
 
-	config "github.com/bongofriend/backend/lib"
-	directorywatcher "github.com/bongofriend/backend/lib/processing"
+	config "github.com/bongofriend/bookplayer/backend/lib"
+	"github.com/bongofriend/bookplayer/backend/lib/processing/directorywatcher"
 )
 
 func main() {
-	config, err := config.GetConfig(config.Dev)
+	envPath, err := config.GetEnvPathFromFlags()
 	if err != nil {
 		log.Fatal(err)
 	}
-	context, cancel := context.WithCancel(context.Background())
+
+	config, err := config.ParseConfig(envPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
 
 	wg := sync.WaitGroup{}
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 
-	wg.Add(1)
-	watcher := directorywatcher.DirectoryWatcher{}
-	watcher.Start(context, &wg, config.Audiobooks)
+	watcher := directorywatcher.NewDirectoryWatcher()
+	watcher.Start(ctx, &wg, config.Audiobooks)
 
 	<-sigChan
+	log.Println("Shutting down")
 	cancel()
 	wg.Wait()
 }

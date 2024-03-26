@@ -38,6 +38,7 @@ func (d DirectoryWatcher) flush() {
 
 func (d DirectoryWatcher) shutdown(c config.AudiobooksConfig) {
 	log.Printf("Stopping to watch %s", c.AudibookDirectoryPath)
+	close(d.PathChan)
 	d.flush()
 }
 

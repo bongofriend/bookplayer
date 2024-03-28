@@ -85,7 +85,7 @@ func fileCheckSum(p string) (string, error) {
 func (d DirectoryWatcher) Start(ctx context.Context, wg *sync.WaitGroup, c config.AudiobooksConfig) error {
 	d.load()
 	ticker := time.NewTicker(c.Interval)
-	log.Printf("Watching %s ...", c.AudibookDirectoryPath)
+	log.Printf("Watching %s", c.AudibookDirectoryPath)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

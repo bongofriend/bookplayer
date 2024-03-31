@@ -10,6 +10,10 @@ import (
 	"github.com/bongofriend/bookplayer/backend/lib/processing/metadataextractor"
 )
 
+const (
+	testfilePath = "/home/memi/projects/bookplayer/data/test.m4b"
+)
+
 func TestNewMetadataExtractor(t *testing.T) {
 	if _, err := metadataextractor.NewMetadataExtractor(); err != nil {
 		t.Fatal(err)
@@ -22,8 +26,7 @@ func TestMetaDataExtractorProcess(t *testing.T) {
 	context, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	wg := sync.WaitGroup{}
 	done := make(chan bool)
-
-	testfilePath := "/home/memi/projects/bookplayer/data/test.m4b"
+	var metadata *metadataextractor.AudiobookMetadata
 
 	go func() {
 		select {
@@ -32,7 +35,7 @@ func TestMetaDataExtractorProcess(t *testing.T) {
 			close(done)
 			return
 		case data := <-extractor.MetadataChan:
-			log.Printf("%+v", data)
+			metadata = &data
 			done <- true
 			close(done)
 		}
@@ -40,13 +43,18 @@ func TestMetaDataExtractorProcess(t *testing.T) {
 
 	extractor.Process(context, &wg, pathChan)
 	pathChan <- testfilePath
-	dataReceived := <-done
+	<-done
 
 	cancel()
 	wg.Wait()
 
-	if !dataReceived {
+	if metadata == nil {
 		log.Fatal("No data received from MetadataExtractor")
+	}
+
+	_, err := metadata.AsModel()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 }

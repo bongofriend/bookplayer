@@ -24,6 +24,10 @@ type AudiobooksConfig struct {
 	Interval              time.Duration `yaml:"INTERVAL"`
 }
 
+type ProcessedAudiobooksConfig struct {
+	ProcessedPath string `mapstructure:"PROCESSED_DIR"`
+}
+
 func ParseConfig(envPath string) (Config, error) {
 	stat, err := os.Stat(envPath)
 	if err != nil {

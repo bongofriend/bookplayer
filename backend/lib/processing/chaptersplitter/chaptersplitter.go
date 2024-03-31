@@ -19,11 +19,11 @@ type ChapterSplitter struct {
 	OutputChan chan lib.Audiobook
 }
 
-func NewChapterSplitter() (ChapterSplitter, error) {
+func NewChapterSplitter() (*ChapterSplitter, error) {
 	if !ffmpegIsAvailable() {
-		return ChapterSplitter{}, errors.New("ffmpeg is not available")
+		return nil, errors.New("ffmpeg is not available")
 	}
-	return ChapterSplitter{make(chan lib.Audiobook)}, nil
+	return &ChapterSplitter{make(chan lib.Audiobook)}, nil
 }
 
 func (sp ChapterSplitter) process(config lib.ProcessedAudiobooksConfig, audiobook lib.Audiobook) error {

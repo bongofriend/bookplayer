@@ -62,16 +62,15 @@ type AudiobookMetadata struct {
 	Format   Format    `json:"format"`
 }
 
-func NewMetadataExtractor() (MetadataExtractor, error) {
+func NewMetadataExtractor() (*MetadataExtractor, error) {
 	if !ffprobeIsAvailable() {
-		return MetadataExtractor{}, errors.New("ffmpeg is not installed or found")
+		return nil, errors.New("ffmpeg is not installed or found")
 	}
-	return MetadataExtractor{
+	return &MetadataExtractor{
 		MetadataChan: make(chan AudiobookMetadata),
 	}, nil
 }
 
-// TODO
 func (m MetadataExtractor) extractMetadata(path string) {
 	if stat, err := os.Stat(path); err != nil || stat.IsDir() {
 		if err != nil {

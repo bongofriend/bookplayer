@@ -11,17 +11,18 @@ import (
 	"sync"
 	"time"
 
-	config "github.com/bongofriend/bookplayer/backend/lib"
+	"github.com/bongofriend/bookplayer/backend/lib/config"
+	"github.com/bongofriend/bookplayer/backend/lib/processing"
 )
 
 type DirectoryWatcher struct {
-	PathChan   chan string
+	PathChan   chan processing.AudiobookDiscoveryResult
 	fileHashes map[string]string
 }
 
 func NewDirectoryWatcher() DirectoryWatcher {
 	return DirectoryWatcher{
-		PathChan:   make(chan string),
+		PathChan:   make(chan processing.AudiobookDiscoveryResult),
 		fileHashes: make(map[string]string),
 	}
 }
@@ -62,7 +63,7 @@ func (d DirectoryWatcher) parseDirectoryContent(c config.AudiobooksConfig) {
 		}
 		if !found || hash != fileHash {
 			d.fileHashes[name] = hash
-			d.PathChan <- pathToFile
+			d.PathChan <- processing.AudiobookDiscoveryResult(pathToFile)
 		}
 	}
 }

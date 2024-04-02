@@ -1,4 +1,4 @@
-package lib
+package config
 
 import (
 	"errors"
@@ -13,6 +13,7 @@ import (
 type Config struct {
 	Server     ServerConfig     `mapstructure:"server"`
 	Audiobooks AudiobooksConfig `mapstructure:"audiobooks"`
+	Db         DbConfig         `mapstructure:"db"`
 }
 
 type ServerConfig struct {
@@ -26,6 +27,11 @@ type AudiobooksConfig struct {
 
 type ProcessedAudiobooksConfig struct {
 	ProcessedPath string `mapstructure:"PROCESSED_DIR"`
+}
+
+type DbConfig struct {
+	Path       string `mapstructure:"DATA_SOURCE"`
+	DriverName string `mapstructure:"DRIVER"`
 }
 
 func ParseConfig(envPath string) (Config, error) {

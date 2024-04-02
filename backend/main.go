@@ -8,17 +8,17 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/bongofriend/bookplayer/backend/lib"
+	"github.com/bongofriend/bookplayer/backend/lib/config"
 	"github.com/bongofriend/bookplayer/backend/lib/processing/directorywatcher"
 )
 
 func main() {
-	envPath, err := lib.GetEnvPathFromFlags()
+	envPath, err := config.GetEnvPathFromFlags()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	config, err := lib.ParseConfig(envPath)
+	config, err := config.ParseConfig(envPath)
 	if err != nil {
 		log.Fatal(err)
 	}

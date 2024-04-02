@@ -10,11 +10,12 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/bongofriend/bookplayer/backend/lib"
+	"github.com/bongofriend/bookplayer/backend/lib/models"
+	"github.com/bongofriend/bookplayer/backend/lib/processing"
 )
 
 type MetadataExtractor struct {
-	MetadataChan chan AudiobookMetadata
+	MetadataChan chan processing.AudiobookMetadataResult
 }
 
 type Chapter struct {
@@ -67,17 +68,18 @@ func NewMetadataExtractor() (*MetadataExtractor, error) {
 		return nil, errors.New("ffmpeg is not installed or found")
 	}
 	return &MetadataExtractor{
-		MetadataChan: make(chan AudiobookMetadata),
+		MetadataChan: make(chan processing.AudiobookMetadataResult),
 	}, nil
 }
 
-func (m MetadataExtractor) extractMetadata(path string) {
-	if stat, err := os.Stat(path); err != nil || stat.IsDir() {
+func (m MetadataExtractor) extractMetadata(path processing.AudiobookDiscoveryResult) {
+	filePath := string(path)
+	if stat, err := os.Stat(string(filePath)); err != nil || stat.IsDir() {
 		if err != nil {
 			log.Println(err)
 		}
 	}
-	ffprobeArgs := []string{"-print_format", "json", "-show_format", "-show_chapters", path}
+	ffprobeArgs := []string{"-print_format", "json", "-show_format", "-show_chapters", filePath}
 	cmd := exec.Command("ffprobe", ffprobeArgs...)
 	output, err := cmd.Output()
 	if err != nil {
@@ -89,10 +91,18 @@ func (m MetadataExtractor) extractMetadata(path string) {
 		log.Println(err)
 		return
 	}
-	m.MetadataChan <- ffprobeOutput
+	model, err := ffprobeOutput.AsModel()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	m.MetadataChan <- processing.AudiobookMetadataResult{
+		Audiobook: model,
+		FilePath:  path,
+	}
 }
 
-func (m MetadataExtractor) Process(ctx context.Context, wg *sync.WaitGroup, pathChan <-chan string) {
+func (m MetadataExtractor) Process(ctx context.Context, wg *sync.WaitGroup, pathChan <-chan processing.AudiobookDiscoveryResult) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -113,49 +123,52 @@ func ffprobeIsAvailable() bool {
 	return err == nil
 }
 
-func (a AudiobookMetadata) AsModel() (lib.Audiobook, error) {
+func (a AudiobookMetadata) AsModel() (models.Audiobook, error) {
 	tags := a.Format.Tags
 	audiobookDuration, err := strconv.ParseFloat(a.Format.Duration, 32)
 	if err != nil {
-		return lib.Audiobook{}, err
+		return models.Audiobook{}, err
 	}
 
-	chapters := make([]lib.Chapter, len(a.Chapters))
+	chapters := make([]models.Chapter, len(a.Chapters))
 	for idx, c := range a.Chapters {
 		data, err := c.asModel()
 		if err != nil {
-			return lib.Audiobook{}, nil
+			return models.Audiobook{}, nil
 		}
 		chapters[idx] = data
 	}
 
-	return lib.Audiobook{
-		Title:       tags.Title,
-		Author:      tags.Artist,
-		Narrator:    tags.Composer,
-		Description: tags.Comment,
-		Genre:       tags.Genre,
-		Duration:    float32(audiobookDuration),
-		Chapters:    chapters,
-		FilePath:    a.Format.Filename,
+	return models.Audiobook{
+		AudiobookCommon: models.AudiobookCommon{
+			Title:       tags.Title,
+			Author:      tags.Artist,
+			Narrator:    tags.Composer,
+			Description: tags.Comment,
+			Genre:       tags.Genre,
+			Duration:    float32(audiobookDuration),
+		},
+		Chapters: chapters,
 	}, nil
 }
 
-func (c Chapter) asModel() (lib.Chapter, error) {
+func (c Chapter) asModel() (models.Chapter, error) {
 	startTime, err := strconv.ParseFloat(c.StartTime, 32)
 	if err != nil {
-		return lib.Chapter{}, err
+		return models.Chapter{}, err
 	}
 	endTime, err := strconv.ParseFloat(c.EndTime, 32)
 	if err != nil {
-		return lib.Chapter{}, err
+		return models.Chapter{}, err
 	}
 
-	return lib.Chapter{
-		Title:     c.Tags.Title,
-		StartTime: float32(startTime),
-		EndTime:   float32(endTime),
-		Start:     c.Start,
-		End:       c.End,
+	return models.Chapter{
+		ChapterCommon: models.ChapterCommon{
+			Title:     c.Tags.Title,
+			StartTime: float32(startTime),
+			EndTime:   float32(endTime),
+			Start:     c.Start,
+			End:       c.End,
+		},
 	}, nil
 }

@@ -8,7 +8,8 @@ import (
 	"testing"
 	"time"
 
-	config "github.com/bongofriend/bookplayer/backend/lib"
+	"github.com/bongofriend/bookplayer/backend/lib/config"
+	"github.com/bongofriend/bookplayer/backend/lib/processing"
 	"github.com/bongofriend/bookplayer/backend/lib/processing/directorywatcher"
 )
 
@@ -39,7 +40,7 @@ func TestDirectoryWatcherObserve(t *testing.T) {
 		case <-context.Done():
 			return
 		case p := <-watcher.PathChan:
-			if p == testFilePath {
+			if p == processing.AudiobookDiscoveryResult(testFilePath) {
 				expectedFilePathReceived = true
 			}
 		}
@@ -83,7 +84,7 @@ func TestDirectoryWatcherUniqueFiles(t *testing.T) {
 			case <-context.Done():
 				return
 			case p := <-watcher.PathChan:
-				if p == testFilePath {
+				if p == processing.AudiobookDiscoveryResult(testFilePath) {
 					filePathReceivedCount += 1
 				}
 			}

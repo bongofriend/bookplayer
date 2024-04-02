@@ -12,22 +12,25 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bongofriend/bookplayer/backend/lib"
+	"github.com/bongofriend/bookplayer/backend/lib/config"
+	"github.com/bongofriend/bookplayer/backend/lib/models"
+	"github.com/bongofriend/bookplayer/backend/lib/processing"
 )
 
 type ChapterSplitter struct {
-	OutputChan chan lib.Audiobook
+	OutputChan chan processing.AudiobookChapterSplitResult
 }
 
 func NewChapterSplitter() (*ChapterSplitter, error) {
 	if !ffmpegIsAvailable() {
 		return nil, errors.New("ffmpeg is not available")
 	}
-	return &ChapterSplitter{make(chan lib.Audiobook)}, nil
+	return &ChapterSplitter{make(chan processing.AudiobookChapterSplitResult)}, nil
 }
 
-func (sp ChapterSplitter) process(config lib.ProcessedAudiobooksConfig, audiobook lib.Audiobook) error {
-	p := audiobook.FilePath
+func (sp ChapterSplitter) process(config config.ProcessedAudiobooksConfig, input processing.AudiobookMetadataResult) error {
+	p := string(input.FilePath)
+	audiobook := input.Audiobook
 	stat, err := os.Stat(p)
 	if err != nil {
 		return err
@@ -49,17 +52,22 @@ func (sp ChapterSplitter) process(config lib.ProcessedAudiobooksConfig, audioboo
 		return err
 	}
 
-	args := getArgs(audiobook, procesedAudiobookPath)
+	args := getArgs(input, procesedAudiobookPath)
 	log.Println(strings.Join(args, " "))
 	cmd := exec.Command("ffmpeg", args...)
 	if _, err = cmd.Output(); err != nil {
 		return err
 	}
-	sp.OutputChan <- audiobook
+	chapterPaths := getChapterPaths(audiobook.Chapters, procesedAudiobookPath)
+	sp.OutputChan <- processing.AudiobookChapterSplitResult{
+		Audiobook:    audiobook,
+		DirPath:      procesedAudiobookPath,
+		ChapterPaths: chapterPaths,
+	}
 	return nil
 }
 
-func (sp ChapterSplitter) Start(ctx context.Context, wg *sync.WaitGroup, inputChan <-chan lib.Audiobook, config lib.ProcessedAudiobooksConfig) {
+func (sp ChapterSplitter) Start(ctx context.Context, wg *sync.WaitGroup, inputChan <-chan processing.AudiobookMetadataResult, config config.ProcessedAudiobooksConfig) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -83,17 +91,19 @@ func ffmpegIsAvailable() bool {
 	return err == nil
 }
 
-func getArgs(audiobook lib.Audiobook, outputPath string) []string {
+func getArgs(input processing.AudiobookMetadataResult, outputPath string) []string {
+	audiobook := input.Audiobook
+	filePath := string(input.FilePath)
 	endTimes := make([]string, len(audiobook.Chapters))
 	for idx, ch := range audiobook.Chapters {
 		endTimes[idx] = strconv.FormatFloat(float64(ch.EndTime), 'f', -1, 32)
 	}
 	endTimeArgs := strings.Join(endTimes, ",")
 
-	outputPathFormat := path.Join(outputPath, "chapter%d.m4b")
+	outputPathFormat := path.Join(outputPath, "%d.m4b")
 	return []string{
 		"-i",
-		audiobook.FilePath,
+		filePath,
 		"-vn",
 		"-acodec",
 		"copy",
@@ -108,4 +118,8 @@ func getArgs(audiobook lib.Audiobook, outputPath string) []string {
 		endTimeArgs,
 		outputPathFormat,
 	}
+}
+
+func getChapterPaths(chapters []models.Chapter, outputPath string) map[string]string {
+	panic("unimplemented")
 }

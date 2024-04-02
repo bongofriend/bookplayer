@@ -7,3 +7,7 @@ audiobooks:
 
 prcocessd:
   PROCESSED_DIR: "/home/memi/projects/bookplayer/processed"
+
+db:
+  DATA_SOURCE: "/home/memi/projects/bookplayer/backend/local.db"
+  DRIVER: "sqlite3"

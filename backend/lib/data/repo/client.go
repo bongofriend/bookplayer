@@ -5,6 +5,7 @@ import (
 
 	"github.com/bongofriend/bookplayer/backend/lib/config"
 	"github.com/bongofriend/bookplayer/backend/lib/data/datasource"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type DbClient struct {
@@ -21,4 +22,8 @@ func NewDbClient(config config.DbConfig) (*DbClient, error) {
 		db:      db,
 		queries: *datasource.New(db),
 	}, nil
+}
+
+func (c *DbClient) Close() error {
+	return c.db.Close()
 }

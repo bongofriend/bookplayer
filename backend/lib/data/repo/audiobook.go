@@ -20,7 +20,7 @@ func (r *AudiobookRepository) InsertAudiobook(context context.Context, audiobook
 	if err != nil {
 		return nil
 	}
-	defer tx.Rollback()
+	defer tx.Commit()
 	qtx := r.client.queries.WithTx(tx)
 	audiobookParams := audiobookAsParams(audiobook)
 	res, err := qtx.InsertAudiobook(context, audiobookParams)

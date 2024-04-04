@@ -1,3 +1,5 @@
+-- +goose Up
+-- +goose StatementBegin
 Create Table Audiobook (
     id int primary key,
     title text not null,
@@ -20,3 +22,10 @@ Create Table Chapter (
 
     foreign key(audiobook_id) references Audiobooks(id)
 );
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+Drop Table Chapter;
+Drop Table Audiobook;
+-- +goose StatementEnd

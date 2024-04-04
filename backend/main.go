@@ -9,7 +9,8 @@ import (
 	"syscall"
 
 	"github.com/bongofriend/bookplayer/backend/lib/config"
-	"github.com/bongofriend/bookplayer/backend/lib/processing/directorywatcher"
+	"github.com/bongofriend/bookplayer/backend/lib/data/repo"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
@@ -22,14 +23,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	if err := repo.ApplyDatabaseMigrations(config.Db); err != nil {
+		log.Fatal(err)
+	}
+	//go-staticcheck:ignore
+	_, cancel := context.WithCancel(context.Background())
 
 	wg := sync.WaitGroup{}
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
-
-	watcher := directorywatcher.NewDirectoryWatcher()
-	watcher.Start(ctx, &wg, config.Audiobooks)
 
 	<-sigChan
 	log.Println("Shutting down")

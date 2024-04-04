@@ -53,7 +53,6 @@ func (sp ChapterSplitter) process(config config.ProcessedAudiobooksConfig, input
 	}
 
 	args := getArgs(input, procesedAudiobookPath)
-	log.Println(strings.Join(args, " "))
 	cmd := exec.Command("ffmpeg", args...)
 	if _, err = cmd.Output(); err != nil {
 		return err

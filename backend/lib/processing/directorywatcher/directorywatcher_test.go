@@ -33,7 +33,6 @@ func TestDirectoryWatcherObserve(t *testing.T) {
 	testFilePath := filepath.Join(testConfig.AudibookDirectoryPath, testFileName)
 	expectedFilePathReceived := false
 
-	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		select {
@@ -65,7 +64,6 @@ func TestDirectoryWatcherUniqueFiles(t *testing.T) {
 	}
 	var wg *sync.WaitGroup = &sync.WaitGroup{}
 
-	wg.Add(1)
 	err := watcher.Start(context, wg, testConfig)
 	if err != nil {
 		wg.Done()

@@ -8,22 +8,22 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/bongofriend/bookplayer/backend/lib/config"
-	"github.com/bongofriend/bookplayer/backend/lib/processing"
 )
 
 type DirectoryWatcher struct {
-	PathChan   chan processing.AudiobookDiscoveryResult
+	config     config.AudiobooksConfig
+	pathChan   chan string
 	fileHashes map[string]string
 }
 
-func NewDirectoryWatcher() DirectoryWatcher {
+func NewDirectoryWatcher(c config.AudiobooksConfig) DirectoryWatcher {
 	return DirectoryWatcher{
-		PathChan:   make(chan processing.AudiobookDiscoveryResult),
+		pathChan:   make(chan string),
 		fileHashes: make(map[string]string),
+		config:     c,
 	}
 }
 
@@ -37,17 +37,10 @@ func (d DirectoryWatcher) flush() {
 
 }
 
-func (d DirectoryWatcher) shutdown(c config.AudiobooksConfig) {
-	log.Printf("Stopping to watch %s", c.AudibookDirectoryPath)
-	close(d.PathChan)
-	d.flush()
-}
-
-func (d DirectoryWatcher) parseDirectoryContent(c config.AudiobooksConfig) {
+func (d DirectoryWatcher) parseDirectoryContent(c config.AudiobooksConfig) error {
 	paths, err := os.ReadDir(c.AudibookDirectoryPath)
 	if err != nil {
-		log.Println(err)
-		return
+		return err
 	}
 	for _, p := range paths {
 		if p.IsDir() {
@@ -58,14 +51,14 @@ func (d DirectoryWatcher) parseDirectoryContent(c config.AudiobooksConfig) {
 		fileHash, found := d.fileHashes[name]
 		hash, err := fileCheckSum(pathToFile)
 		if err != nil {
-			log.Println(err)
-			continue
+			return err
 		}
 		if !found || hash != fileHash {
 			d.fileHashes[name] = hash
-			d.PathChan <- processing.AudiobookDiscoveryResult(pathToFile)
+			d.pathChan <- pathToFile
 		}
 	}
+	return nil
 }
 
 func fileCheckSum(p string) (string, error) {
@@ -83,22 +76,35 @@ func fileCheckSum(p string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func (d DirectoryWatcher) Start(ctx context.Context, wg *sync.WaitGroup, c config.AudiobooksConfig) error {
-	d.load()
+func (d DirectoryWatcher) Shutdown() {
+	log.Printf("Stopping to watch %s", d.config.AudibookDirectoryPath)
+	close(d.pathChan)
+	d.flush()
+}
+
+func (d DirectoryWatcher) Output() (chan string, error) {
+	return d.pathChan, nil
+}
+
+func (d *DirectoryWatcher) Start(ctx context.Context, inputChan chan struct{}, doneCh chan struct{}) {
+	c := d.config
 	ticker := time.NewTicker(c.Interval)
+	d.load()
 	log.Printf("Watching %s", c.AudibookDirectoryPath)
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer func() {
+			d.Shutdown()
+			doneCh <- struct{}{}
+		}()
 		for {
 			select {
 			case <-ctx.Done():
-				d.shutdown(c)
 				return
 			case <-ticker.C:
-				d.parseDirectoryContent(c)
+				if err := d.parseDirectoryContent(c); err != nil {
+					log.Println(err)
+				}
 			}
 		}
 	}()
-	return nil
 }

@@ -15,6 +15,7 @@ type ChapterCommon struct {
 	EndTime   float32 `json:"EndTime"`
 	Start     int     `json:"Start"`
 	End       int     `json:"End"`
+	Numbering int     `json:"Numbering"`
 }
 
 type Chapter struct {
@@ -34,6 +35,5 @@ type AudiobookProcessed struct {
 
 type ProcessedChapter struct {
 	ChapterCommon
-	Numbering int
-	FilePath  string
+	FilePath string
 }

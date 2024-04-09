@@ -10,7 +10,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/bongofriend/bookplayer/backend/lib/config"
 	"github.com/bongofriend/bookplayer/backend/lib/models"
@@ -18,18 +17,22 @@ import (
 )
 
 type ChapterSplitter struct {
-	OutputChan chan processing.AudiobookChapterSplitResult
+	resultChan chan models.AudiobookProcessed
+	config     config.ProcessedAudiobooksConfig
 }
 
-func NewChapterSplitter() (*ChapterSplitter, error) {
+func NewChapterSplitter(config config.ProcessedAudiobooksConfig) (*ChapterSplitter, error) {
 	if !ffmpegIsAvailable() {
 		return nil, errors.New("ffmpeg is not available")
 	}
-	return &ChapterSplitter{make(chan processing.AudiobookChapterSplitResult)}, nil
+	return &ChapterSplitter{
+		resultChan: make(chan models.AudiobookProcessed),
+		config:     config,
+	}, nil
 }
 
-func (sp ChapterSplitter) process(config config.ProcessedAudiobooksConfig, input processing.AudiobookMetadataResult) error {
-	p := string(input.FilePath)
+func (sp ChapterSplitter) process(input processing.AudiobookMetadataResult) error {
+	p := input.FilePath
 	audiobook := input.Audiobook
 	stat, err := os.Stat(p)
 	if err != nil {
@@ -39,15 +42,15 @@ func (sp ChapterSplitter) process(config config.ProcessedAudiobooksConfig, input
 		return fmt.Errorf("%s is not file", p)
 	}
 
-	stat, err = os.Stat(config.ProcessedPath)
+	stat, err = os.Stat(sp.config.ProcessedPath)
 	if err != nil {
 		return err
 	}
 	if !stat.IsDir() {
-		return fmt.Errorf("%s already exists as file", config.ProcessedPath)
+		return fmt.Errorf("%s already exists as file", sp.config.ProcessedPath)
 	}
 
-	procesedAudiobookPath := path.Join(config.ProcessedPath, audiobook.Title)
+	procesedAudiobookPath := path.Join(sp.config.ProcessedPath, audiobook.Title)
 	if err = os.Mkdir(procesedAudiobookPath, 0755); err != nil {
 		return err
 	}
@@ -57,37 +60,21 @@ func (sp ChapterSplitter) process(config config.ProcessedAudiobooksConfig, input
 	if _, err = cmd.Output(); err != nil {
 		return err
 	}
-	chapterPaths := getChapterPaths(audiobook.Chapters, procesedAudiobookPath)
-	sp.OutputChan <- processing.AudiobookChapterSplitResult{
-		Audiobook:    audiobook,
-		DirPath:      procesedAudiobookPath,
-		ChapterPaths: chapterPaths,
+	processedAudiobook, err := extendAudiobook(audiobook, procesedAudiobookPath, input.FilePath)
+	if err != nil {
+		return err
 	}
+	sp.resultChan <- *processedAudiobook
 	return nil
-}
-
-func (sp ChapterSplitter) Start(ctx context.Context, wg *sync.WaitGroup, inputChan <-chan processing.AudiobookMetadataResult, config config.ProcessedAudiobooksConfig) {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-			case <-ctx.Done():
-				close(sp.OutputChan)
-				return
-			case a := <-inputChan:
-				err := sp.process(config, a)
-				if err != nil {
-					log.Println(err)
-				}
-			}
-		}
-	}()
 }
 
 func ffmpegIsAvailable() bool {
 	_, err := exec.LookPath("ffmpeg")
 	return err == nil
+}
+
+func getChapterOutputPathFormat(dirPath string) string {
+	return path.Join(dirPath, "%d.m4b")
 }
 
 func getArgs(input processing.AudiobookMetadataResult, outputPath string) []string {
@@ -98,8 +85,8 @@ func getArgs(input processing.AudiobookMetadataResult, outputPath string) []stri
 		endTimes[idx] = strconv.FormatFloat(float64(ch.EndTime), 'f', -1, 32)
 	}
 	endTimeArgs := strings.Join(endTimes, ",")
+	outputPathFormat := getChapterOutputPathFormat(outputPath)
 
-	outputPathFormat := path.Join(outputPath, "%d.m4b")
 	return []string{
 		"-i",
 		filePath,
@@ -112,13 +99,63 @@ func getArgs(input processing.AudiobookMetadataResult, outputPath string) []stri
 		"-reset_timestamps",
 		"1",
 		"-segment_start_number",
-		"1",
+		"0",
 		"-segment_times",
 		endTimeArgs,
 		outputPathFormat,
 	}
 }
 
-func getChapterPaths(chapters []models.Chapter, outputPath string) map[string]string {
-	panic("unimplemented")
+func extendAudiobook(a models.Audiobook, splitChapterDirPath string, audiobookFilePath string) (*models.AudiobookProcessed, error) {
+	processedChapters := make([]models.ProcessedChapter, 0)
+	outputPathFormat := getChapterOutputPathFormat(splitChapterDirPath)
+	for _, ch := range a.Chapters {
+		chapterPath := fmt.Sprintf(outputPathFormat, ch.Numbering)
+		stat, err := os.Stat(chapterPath)
+		if err != nil {
+			return nil, err
+		}
+		if !stat.Mode().IsRegular() {
+			return nil, fmt.Errorf("%s not a file", chapterPath)
+		}
+		processed := models.ProcessedChapter{
+			ChapterCommon: ch.ChapterCommon,
+			FilePath:      chapterPath,
+		}
+		processedChapters = append(processedChapters, processed)
+
+	}
+	return &models.AudiobookProcessed{
+		AudiobookCommon:   a.AudiobookCommon,
+		FilePath:          audiobookFilePath,
+		ProcessedChapters: processedChapters,
+	}, nil
+}
+
+func (sp ChapterSplitter) Shutdown() {
+	close(sp.resultChan)
+}
+
+func (sp ChapterSplitter) Output() (chan models.AudiobookProcessed, error) {
+	return sp.resultChan, nil
+}
+
+func (sp ChapterSplitter) Start(ctx context.Context, inputChan <-chan processing.AudiobookMetadataResult, doneCh chan struct{}) {
+	go func() {
+		defer func() {
+			sp.Shutdown()
+			doneCh <- struct{}{}
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case a := <-inputChan:
+				err := sp.process(a)
+				if err != nil {
+					log.Println(err)
+				}
+			}
+		}
+	}()
 }

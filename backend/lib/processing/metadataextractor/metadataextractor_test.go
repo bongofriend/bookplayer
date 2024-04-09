@@ -3,12 +3,10 @@ package metadataextractor_test
 import (
 	"context"
 	"log"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/bongofriend/bookplayer/backend/lib/models"
-	"github.com/bongofriend/bookplayer/backend/lib/processing"
 	"github.com/bongofriend/bookplayer/backend/lib/processing/metadataextractor"
 )
 
@@ -24,30 +22,35 @@ func TestNewMetadataExtractor(t *testing.T) {
 
 func TestMetaDataExtractorProcess(t *testing.T) {
 	extractor, _ := metadataextractor.NewMetadataExtractor()
-	pathChan := make(chan processing.AudiobookDiscoveryResult)
+	pathChan := make(chan string)
 	context, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	wg := sync.WaitGroup{}
-	done := make(chan bool)
+	doneExtractor := make(chan struct{})
+	doneConsumer := make(chan struct{})
+
+	extractor.Start(context, pathChan, doneExtractor)
+	pathChan <- testfilePath
+
 	var audiobook *models.Audiobook
 	go func() {
+		defer func() {
+			doneConsumer <- struct{}{}
+		}()
+		output, err := extractor.Output()
+		if err != nil {
+			log.Fatal(err)
+		}
 		select {
 		case <-context.Done():
-			done <- false
-			close(done)
 			return
-		case data := <-extractor.MetadataChan:
+		case data := <-output:
 			audiobook = &data.Audiobook
-			done <- true
-			close(done)
+			return
 		}
 	}()
 
-	extractor.Process(context, &wg, pathChan)
-	pathChan <- testfilePath
-	<-done
-
+	<-doneConsumer
 	cancel()
-	wg.Wait()
+	<-doneExtractor
 
 	if audiobook == nil {
 		log.Fatal("No data received from MetadataExtractor")

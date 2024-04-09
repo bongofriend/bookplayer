@@ -2,44 +2,45 @@ package directorywatcher_test
 
 import (
 	"context"
+	"log"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/bongofriend/bookplayer/backend/lib/config"
-	"github.com/bongofriend/bookplayer/backend/lib/processing"
 	"github.com/bongofriend/bookplayer/backend/lib/processing/directorywatcher"
 )
 
 func TestDirectoryWatcherObserve(t *testing.T) {
-	watcher := directorywatcher.NewDirectoryWatcher()
 	context, cancel := context.WithCancel(context.Background())
 	testConfig := config.AudiobooksConfig{
 		AudibookDirectoryPath: t.TempDir(),
 		Interval:              2 * time.Second,
 	}
-	var wg *sync.WaitGroup = &sync.WaitGroup{}
+	watcher := directorywatcher.NewDirectoryWatcher(testConfig)
+	doneConsumer := make(chan struct{})
+	doneWatcher := make(chan struct{})
+	watcher.Start(context, make(chan struct{}), doneWatcher)
 
-	wg.Add(1)
-	err := watcher.Start(context, wg, testConfig)
-	if err != nil {
-		wg.Done()
-		t.Fatal(err)
-	}
 	testFileName := "test.txt"
 	testFileContent := "Hello from TestFile!"
 	testFilePath := filepath.Join(testConfig.AudibookDirectoryPath, testFileName)
 	expectedFilePathReceived := false
 
 	go func() {
-		defer wg.Done()
+		defer func() {
+			doneConsumer <- struct{}{}
+		}()
+		output, err := watcher.Output()
+		if err != nil {
+			log.Fatal(err)
+		}
 		select {
 		case <-context.Done():
 			return
-		case p := <-watcher.PathChan:
-			if p == processing.AudiobookDiscoveryResult(testFilePath) {
+		case p := <-output:
+			if p == testFilePath {
 				expectedFilePathReceived = true
 			}
 		}
@@ -47,42 +48,43 @@ func TestDirectoryWatcherObserve(t *testing.T) {
 	}()
 
 	os.WriteFile(testFilePath, []byte(testFileContent), 0666)
-	time.Sleep(testConfig.Interval * 2)
+	<-doneConsumer
 	cancel()
-	wg.Wait()
+	<-doneWatcher
+
 	if !expectedFilePathReceived {
 		t.Fatal("Expected test file path not received")
 	}
 }
 
 func TestDirectoryWatcherUniqueFiles(t *testing.T) {
-	watcher := directorywatcher.NewDirectoryWatcher()
 	context, cancel := context.WithCancel(context.Background())
 	testConfig := config.AudiobooksConfig{
 		AudibookDirectoryPath: t.TempDir(),
 		Interval:              2 * time.Second,
 	}
-	var wg *sync.WaitGroup = &sync.WaitGroup{}
-
-	err := watcher.Start(context, wg, testConfig)
-	if err != nil {
-		wg.Done()
-		t.Fatal(err)
-	}
+	watcher := directorywatcher.NewDirectoryWatcher(testConfig)
+	doneCh := make(chan struct{})
+	watcher.Start(context, make(chan struct{}), doneCh)
 
 	testFileName := "test.txt"
 	testFilePath := filepath.Join(testConfig.AudibookDirectoryPath, testFileName)
 	filePathReceivedCount := 0
 
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer func() {
+			doneCh <- struct{}{}
+		}()
+		output, err := watcher.Output()
+		if err != nil {
+			log.Fatal(err)
+		}
 		for {
 			select {
 			case <-context.Done():
 				return
-			case p := <-watcher.PathChan:
-				if p == processing.AudiobookDiscoveryResult(testFilePath) {
+			case p := <-output:
+				if p == testFilePath {
 					filePathReceivedCount += 1
 				}
 			}
@@ -96,9 +98,11 @@ func TestDirectoryWatcherUniqueFiles(t *testing.T) {
 	}
 
 	cancel()
-	wg.Wait()
+	for i := 0; i < 2; i++ {
+		<-doneCh
+	}
 
 	if filePathReceivedCount != 2 {
-		t.Fatal("Received unexpected number of files")
+		t.Fatalf("Expected %d emissions; received: %d", 2, filePathReceivedCount)
 	}
 }

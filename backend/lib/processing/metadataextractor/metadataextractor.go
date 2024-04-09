@@ -8,14 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"sync"
 
 	"github.com/bongofriend/bookplayer/backend/lib/models"
 	"github.com/bongofriend/bookplayer/backend/lib/processing"
 )
 
 type MetadataExtractor struct {
-	MetadataChan chan processing.AudiobookMetadataResult
+	metadataChan chan processing.AudiobookMetadataResult
 }
 
 type Chapter struct {
@@ -68,11 +67,11 @@ func NewMetadataExtractor() (*MetadataExtractor, error) {
 		return nil, errors.New("ffmpeg is not installed or found")
 	}
 	return &MetadataExtractor{
-		MetadataChan: make(chan processing.AudiobookMetadataResult),
+		metadataChan: make(chan processing.AudiobookMetadataResult),
 	}, nil
 }
 
-func (m MetadataExtractor) extractMetadata(path processing.AudiobookDiscoveryResult) {
+func (m MetadataExtractor) extractMetadata(path string) error {
 	filePath := string(path)
 	if stat, err := os.Stat(string(filePath)); err != nil || stat.IsDir() {
 		if err != nil {
@@ -83,39 +82,21 @@ func (m MetadataExtractor) extractMetadata(path processing.AudiobookDiscoveryRes
 	cmd := exec.Command("ffprobe", ffprobeArgs...)
 	output, err := cmd.Output()
 	if err != nil {
-		log.Println(err)
-		return
+		return err
 	}
 	ffprobeOutput := AudiobookMetadata{}
 	if err := json.Unmarshal(output, &ffprobeOutput); err != nil {
-		log.Println(err)
-		return
+		return err
 	}
 	model, err := ffprobeOutput.AsModel()
 	if err != nil {
-		log.Println(err)
-		return
+		return err
 	}
-	m.MetadataChan <- processing.AudiobookMetadataResult{
+	m.metadataChan <- processing.AudiobookMetadataResult{
 		Audiobook: model,
 		FilePath:  path,
 	}
-}
-
-func (m MetadataExtractor) Process(ctx context.Context, wg *sync.WaitGroup, pathChan <-chan processing.AudiobookDiscoveryResult) {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("Shutting down MetadataExtractor")
-				return
-			case path := <-pathChan:
-				m.extractMetadata(path)
-			}
-		}
-	}()
+	return nil
 }
 
 func ffprobeIsAvailable() bool {
@@ -169,6 +150,37 @@ func (c Chapter) asModel() (models.Chapter, error) {
 			EndTime:   float32(endTime),
 			Start:     c.Start,
 			End:       c.End,
+			Numbering: c.ID,
 		},
 	}, nil
+}
+
+func (m MetadataExtractor) Shutdown() {
+	log.Println("Shutting down MetadataExtractor")
+	close(m.metadataChan)
+}
+
+func (m MetadataExtractor) Output() (chan processing.AudiobookMetadataResult, error) {
+	return m.metadataChan, nil
+}
+
+func (m *MetadataExtractor) Start(ctx context.Context, intputChan chan string, doneChan chan struct{}) {
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				m.Shutdown()
+				doneChan <- struct{}{}
+				return
+			case path, ok := <-intputChan:
+				if !ok {
+					return
+				}
+				if err := m.extractMetadata(path); err != nil {
+					log.Println(err)
+				}
+
+			}
+		}
+	}()
 }

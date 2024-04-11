@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bongofriend/bookplayer/backend/lib/models"
+	"github.com/bongofriend/bookplayer/backend/lib/processing"
 	"github.com/bongofriend/bookplayer/backend/lib/processing/metadataextractor"
 )
 
@@ -22,12 +23,13 @@ func TestNewMetadataExtractor(t *testing.T) {
 
 func TestMetaDataExtractorProcess(t *testing.T) {
 	extractor, _ := metadataextractor.NewMetadataExtractor()
+	component := processing.NewPipelineComponent[string, processing.AudiobookMetadataResult](extractor)
 	pathChan := make(chan string)
 	context, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	doneExtractor := make(chan struct{})
 	doneConsumer := make(chan struct{})
 
-	extractor.Start(context, pathChan, doneExtractor)
+	component.Start(context, pathChan, doneExtractor)
 	pathChan <- testfilePath
 
 	var audiobook *models.Audiobook
@@ -35,14 +37,10 @@ func TestMetaDataExtractorProcess(t *testing.T) {
 		defer func() {
 			doneConsumer <- struct{}{}
 		}()
-		output, err := extractor.Output()
-		if err != nil {
-			log.Fatal(err)
-		}
 		select {
 		case <-context.Done():
 			return
-		case data := <-output:
+		case data := <-component.OutputChan:
 			audiobook = &data.Audiobook
 			return
 		}

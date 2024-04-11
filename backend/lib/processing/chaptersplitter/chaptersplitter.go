@@ -1,7 +1,6 @@
 package chaptersplitter
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -17,8 +16,7 @@ import (
 )
 
 type ChapterSplitter struct {
-	resultChan chan models.AudiobookProcessed
-	config     config.ProcessedAudiobooksConfig
+	config config.ProcessedAudiobooksConfig
 }
 
 func NewChapterSplitter(config config.ProcessedAudiobooksConfig) (*ChapterSplitter, error) {
@@ -26,46 +24,8 @@ func NewChapterSplitter(config config.ProcessedAudiobooksConfig) (*ChapterSplitt
 		return nil, errors.New("ffmpeg is not available")
 	}
 	return &ChapterSplitter{
-		resultChan: make(chan models.AudiobookProcessed),
-		config:     config,
+		config: config,
 	}, nil
-}
-
-func (sp ChapterSplitter) process(input processing.AudiobookMetadataResult) error {
-	p := input.FilePath
-	audiobook := input.Audiobook
-	stat, err := os.Stat(p)
-	if err != nil {
-		return err
-	}
-	if stat.IsDir() {
-		return fmt.Errorf("%s is not file", p)
-	}
-
-	stat, err = os.Stat(sp.config.ProcessedPath)
-	if err != nil {
-		return err
-	}
-	if !stat.IsDir() {
-		return fmt.Errorf("%s already exists as file", sp.config.ProcessedPath)
-	}
-
-	procesedAudiobookPath := path.Join(sp.config.ProcessedPath, audiobook.Title)
-	if err = os.Mkdir(procesedAudiobookPath, 0755); err != nil {
-		return err
-	}
-
-	args := getArgs(input, procesedAudiobookPath)
-	cmd := exec.Command("ffmpeg", args...)
-	if _, err = cmd.Output(); err != nil {
-		return err
-	}
-	processedAudiobook, err := extendAudiobook(audiobook, procesedAudiobookPath, input.FilePath)
-	if err != nil {
-		return err
-	}
-	sp.resultChan <- *processedAudiobook
-	return nil
 }
 
 func ffmpegIsAvailable() bool {
@@ -133,29 +93,42 @@ func extendAudiobook(a models.Audiobook, splitChapterDirPath string, audiobookFi
 }
 
 func (sp ChapterSplitter) Shutdown() {
-	close(sp.resultChan)
+	log.Println("Shutting down ChapterSplitter")
 }
 
-func (sp ChapterSplitter) Output() (chan models.AudiobookProcessed, error) {
-	return sp.resultChan, nil
-}
+func (sp ChapterSplitter) Handle(input processing.AudiobookMetadataResult, outputChan chan models.AudiobookProcessed) error {
+	p := input.FilePath
+	audiobook := input.Audiobook
+	stat, err := os.Stat(p)
+	if err != nil {
+		return err
+	}
+	if stat.IsDir() {
+		return fmt.Errorf("%s is not file", p)
+	}
 
-func (sp ChapterSplitter) Start(ctx context.Context, inputChan <-chan processing.AudiobookMetadataResult, doneCh chan struct{}) {
-	go func() {
-		defer func() {
-			sp.Shutdown()
-			doneCh <- struct{}{}
-		}()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case a := <-inputChan:
-				err := sp.process(a)
-				if err != nil {
-					log.Println(err)
-				}
-			}
-		}
-	}()
+	stat, err = os.Stat(sp.config.ProcessedPath)
+	if err != nil {
+		return err
+	}
+	if !stat.IsDir() {
+		return fmt.Errorf("%s already exists as file", sp.config.ProcessedPath)
+	}
+
+	procesedAudiobookPath := path.Join(sp.config.ProcessedPath, audiobook.Title)
+	if err = os.Mkdir(procesedAudiobookPath, 0755); err != nil {
+		return err
+	}
+
+	args := getArgs(input, procesedAudiobookPath)
+	cmd := exec.Command("ffmpeg", args...)
+	if _, err = cmd.Output(); err != nil {
+		return err
+	}
+	processedAudiobook, err := extendAudiobook(audiobook, procesedAudiobookPath, input.FilePath)
+	if err != nil {
+		return err
+	}
+	outputChan <- *processedAudiobook
+	return nil
 }

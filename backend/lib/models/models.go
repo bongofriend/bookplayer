@@ -13,9 +13,9 @@ type ChapterCommon struct {
 	Title     string  `json:"Title"`
 	StartTime float32 `json:"StartTime"`
 	EndTime   float32 `json:"EndTime"`
-	Start     int     `json:"Start"`
-	End       int     `json:"End"`
-	Numbering int     `json:"Numbering"`
+	//Start     int     `json:"Start"`
+	//End       int     `json:"End"`
+	Numbering int `json:"Numbering"`
 }
 
 type Chapter struct {

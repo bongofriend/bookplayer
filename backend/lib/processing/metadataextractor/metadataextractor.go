@@ -1,7 +1,7 @@
 package metadataextractor
 
 import (
-	"context"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"log"
@@ -71,7 +71,7 @@ func NewMetadataExtractor() (*MetadataExtractor, error) {
 	}, nil
 }
 
-func (m MetadataExtractor) extractMetadata(path string) error {
+func (m MetadataExtractor) Handle(path string, outputChan chan processing.AudiobookMetadataResult) error {
 	filePath := string(path)
 	if stat, err := os.Stat(string(filePath)); err != nil || stat.IsDir() {
 		if err != nil {
@@ -85,14 +85,18 @@ func (m MetadataExtractor) extractMetadata(path string) error {
 		return err
 	}
 	ffprobeOutput := AudiobookMetadata{}
-	if err := json.Unmarshal(output, &ffprobeOutput); err != nil {
+	outputBuffer := bytes.Buffer{}
+	if err := json.Compact(&outputBuffer, output); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(outputBuffer.Bytes(), &ffprobeOutput); err != nil {
 		return err
 	}
 	model, err := ffprobeOutput.AsModel()
 	if err != nil {
 		return err
 	}
-	m.metadataChan <- processing.AudiobookMetadataResult{
+	outputChan <- processing.AudiobookMetadataResult{
 		Audiobook: model,
 		FilePath:  path,
 	}
@@ -148,8 +152,8 @@ func (c Chapter) asModel() (models.Chapter, error) {
 			Title:     c.Tags.Title,
 			StartTime: float32(startTime),
 			EndTime:   float32(endTime),
-			Start:     c.Start,
-			End:       c.End,
+			//Start:     c.Start,
+			//End:       c.End,
 			Numbering: c.ID,
 		},
 	}, nil
@@ -157,30 +161,4 @@ func (c Chapter) asModel() (models.Chapter, error) {
 
 func (m MetadataExtractor) Shutdown() {
 	log.Println("Shutting down MetadataExtractor")
-	close(m.metadataChan)
-}
-
-func (m MetadataExtractor) Output() (chan processing.AudiobookMetadataResult, error) {
-	return m.metadataChan, nil
-}
-
-func (m *MetadataExtractor) Start(ctx context.Context, intputChan chan string, doneChan chan struct{}) {
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				m.Shutdown()
-				doneChan <- struct{}{}
-				return
-			case path, ok := <-intputChan:
-				if !ok {
-					return
-				}
-				if err := m.extractMetadata(path); err != nil {
-					log.Println(err)
-				}
-
-			}
-		}
-	}()
 }

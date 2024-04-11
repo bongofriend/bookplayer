@@ -11,7 +11,7 @@ import (
 )
 
 const getAllAudiobooks = `-- name: GetAllAudiobooks :many
-Select id, title, author, narrator, description, duration, dir_path, chapter_count
+Select id, title, author, narrator, description, duration, dir_path, chapter_count, genre
 From Audiobook a
 `
 
@@ -33,6 +33,59 @@ func (q *Queries) GetAllAudiobooks(ctx context.Context) ([]Audiobook, error) {
 			&i.Duration,
 			&i.DirPath,
 			&i.ChapterCount,
+			&i.Genre,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAudiobookById = `-- name: GetAudiobookById :many
+Select a.id, a.title, a.author, a.narrator, a.description, a.duration, a.dir_path, a.chapter_count, a.genre, c.id, c.audiobook_id, c.numbering, c.title, c.start_time, c.end_time, c.file_path
+From Audiobook a
+Join Chapter c On a.id = c.audiobook_id
+Where a.id = ?
+`
+
+type GetAudiobookByIdRow struct {
+	Audiobook Audiobook
+	Chapter   Chapter
+}
+
+func (q *Queries) GetAudiobookById(ctx context.Context, id int64) ([]GetAudiobookByIdRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAudiobookById, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAudiobookByIdRow
+	for rows.Next() {
+		var i GetAudiobookByIdRow
+		if err := rows.Scan(
+			&i.Audiobook.ID,
+			&i.Audiobook.Title,
+			&i.Audiobook.Author,
+			&i.Audiobook.Narrator,
+			&i.Audiobook.Description,
+			&i.Audiobook.Duration,
+			&i.Audiobook.DirPath,
+			&i.Audiobook.ChapterCount,
+			&i.Audiobook.Genre,
+			&i.Chapter.ID,
+			&i.Chapter.AudiobookID,
+			&i.Chapter.Numbering,
+			&i.Chapter.Title,
+			&i.Chapter.StartTime,
+			&i.Chapter.EndTime,
+			&i.Chapter.FilePath,
 		); err != nil {
 			return nil, err
 		}
@@ -86,7 +139,7 @@ func (q *Queries) GetAudiobookChapters(ctx context.Context, audiobookID int64) (
 }
 
 const insertAudiobook = `-- name: InsertAudiobook :execresult
-Insert Into Audiobook (title, author, narrator, description, duration, dir_path, chapter_count) Values (?, ?, ?, ?, ?, ?, ?)
+Insert Into Audiobook (title, author, narrator, description, duration, dir_path, chapter_count, genre) Values (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertAudiobookParams struct {
@@ -97,6 +150,7 @@ type InsertAudiobookParams struct {
 	Duration     int64
 	DirPath      string
 	ChapterCount int64
+	Genre        string
 }
 
 func (q *Queries) InsertAudiobook(ctx context.Context, arg InsertAudiobookParams) (sql.Result, error) {
@@ -108,6 +162,7 @@ func (q *Queries) InsertAudiobook(ctx context.Context, arg InsertAudiobookParams
 		arg.Duration,
 		arg.DirPath,
 		arg.ChapterCount,
+		arg.Genre,
 	)
 }
 

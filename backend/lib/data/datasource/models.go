@@ -13,6 +13,7 @@ type Audiobook struct {
 	Duration     int64
 	DirPath      string
 	ChapterCount int64
+	Genre        string
 }
 
 type Chapter struct {

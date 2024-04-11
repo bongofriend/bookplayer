@@ -1,18 +1,19 @@
 -- +goose Up
 -- +goose StatementBegin
 Create Table Audiobook (
-    id int primary key,
+    id integer primary key not null,
     title text not null,
     author text not null,
     narrator text not null,
     description text not null,
     duration int not null,
     dir_path text not null,
-    chapter_count int not null
+    chapter_count int not null,
+    genre text not null
 );
 
 Create Table Chapter (
-    id int primary key,
+    id integer primary key not null,
     audiobook_id int not null,
     numbering int not null,
     title text not null,

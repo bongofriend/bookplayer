@@ -2,13 +2,13 @@ package directorywatcher_test
 
 import (
 	"context"
-	"log"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/bongofriend/bookplayer/backend/lib/config"
+	"github.com/bongofriend/bookplayer/backend/lib/processing"
 	"github.com/bongofriend/bookplayer/backend/lib/processing/directorywatcher"
 )
 
@@ -18,10 +18,12 @@ func TestDirectoryWatcherObserve(t *testing.T) {
 		AudibookDirectoryPath: t.TempDir(),
 		Interval:              2 * time.Second,
 	}
-	watcher := directorywatcher.NewDirectoryWatcher(testConfig)
+	handler := directorywatcher.NewDirectoryWatcher(testConfig)
+	watcher := processing.NewPipelineComponent[time.Time, string](&handler)
 	doneConsumer := make(chan struct{})
 	doneWatcher := make(chan struct{})
-	watcher.Start(context, make(chan struct{}), doneWatcher)
+	ticker := time.NewTicker(testConfig.Interval)
+	watcher.Start(context, ticker.C, doneWatcher)
 
 	testFileName := "test.txt"
 	testFileContent := "Hello from TestFile!"
@@ -32,10 +34,7 @@ func TestDirectoryWatcherObserve(t *testing.T) {
 		defer func() {
 			doneConsumer <- struct{}{}
 		}()
-		output, err := watcher.Output()
-		if err != nil {
-			log.Fatal(err)
-		}
+		output := watcher.OutputChan
 		select {
 		case <-context.Done():
 			return
@@ -63,9 +62,11 @@ func TestDirectoryWatcherUniqueFiles(t *testing.T) {
 		AudibookDirectoryPath: t.TempDir(),
 		Interval:              2 * time.Second,
 	}
-	watcher := directorywatcher.NewDirectoryWatcher(testConfig)
+	handler := directorywatcher.NewDirectoryWatcher(testConfig)
+	watcher := processing.NewPipelineComponent[time.Time, string](&handler)
 	doneCh := make(chan struct{})
-	watcher.Start(context, make(chan struct{}), doneCh)
+	ticker := time.NewTicker(testConfig.Interval)
+	watcher.Start(context, ticker.C, doneCh)
 
 	testFileName := "test.txt"
 	testFilePath := filepath.Join(testConfig.AudibookDirectoryPath, testFileName)
@@ -75,10 +76,7 @@ func TestDirectoryWatcherUniqueFiles(t *testing.T) {
 		defer func() {
 			doneCh <- struct{}{}
 		}()
-		output, err := watcher.Output()
-		if err != nil {
-			log.Fatal(err)
-		}
+		output := watcher.OutputChan
 		for {
 			select {
 			case <-context.Done():

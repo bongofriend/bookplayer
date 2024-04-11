@@ -3,6 +3,7 @@ package chaptersplitter_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path"
@@ -25,10 +26,11 @@ func TestChapterSplitter(t *testing.T) {
 	config := config.ProcessedAudiobooksConfig{
 		ProcessedPath: t.TempDir(),
 	}
-	chaptersplitter, err := chaptersplitter.NewChapterSplitter(config)
+	handler, err := chaptersplitter.NewChapterSplitter(config)
 	if err != nil {
 		t.Fatal(err)
 	}
+	chapterSplitter := processing.NewPipelineComponent[processing.AudiobookMetadataResult, models.AudiobookProcessed](handler)
 	inputChan := make(chan processing.AudiobookMetadataResult, 1)
 	doneConsumer := make(chan bool)
 	doneSplitter := make(chan struct{})
@@ -36,16 +38,12 @@ func TestChapterSplitter(t *testing.T) {
 	var result *models.AudiobookProcessed
 
 	go func() {
-		output, err := chaptersplitter.Output()
-		if err != nil {
-			log.Fatal(err)
-		}
 		select {
 		case <-context.Done():
 			doneConsumer <- false
 			close(doneConsumer)
 			return
-		case a := <-output:
+		case a := <-chapterSplitter.OutputChan:
 			result = &a
 			doneConsumer <- true
 			close(doneConsumer)
@@ -53,7 +51,7 @@ func TestChapterSplitter(t *testing.T) {
 		}
 	}()
 
-	chaptersplitter.Start(context, inputChan, doneSplitter)
+	chapterSplitter.Start(context, inputChan, doneSplitter)
 	inputChan <- processing.AudiobookMetadataResult{
 		Audiobook: audiobook,
 		FilePath:  testFilePath,
@@ -76,5 +74,8 @@ func TestChapterSplitter(t *testing.T) {
 	if len(result.ProcessedChapters) != len(audiobook.Chapters) {
 		log.Fatalf("Expected: %d chapter files, Found: %d chapter files", len(audiobook.Chapters), len(result.ProcessedChapters))
 	}
+
+	data, _ := json.Marshal(result)
+	fmt.Println(string(data))
 
 }

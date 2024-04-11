@@ -32,6 +32,7 @@ type ProcessedAudiobooksConfig struct {
 type DbConfig struct {
 	Path       string `mapstructure:"DATA_SOURCE"`
 	DriverName string `mapstructure:"DRIVER"`
+	Migrations string `mapstructure:"MIGRATIONS"`
 }
 
 func ParseConfig(envPath string) (Config, error) {

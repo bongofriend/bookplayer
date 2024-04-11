@@ -9,5 +9,6 @@ prcocessd:
   PROCESSED_DIR: "/home/memi/projects/bookplayer/processed"
 
 db:
+  MIGRATIONS: "/home/memi/projects/bookplayer/backend/db/migrations"
   DATA_SOURCE: "/home/memi/projects/bookplayer/backend/local.db"
   DRIVER: "sqlite3"

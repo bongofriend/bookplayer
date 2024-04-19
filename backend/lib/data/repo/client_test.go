@@ -11,9 +11,9 @@ import (
 
 func TestDbClient(t *testing.T) {
 	tmpDir := t.TempDir()
-	testConfig := config.DbConfig{
-		Path:       path.Join(tmpDir, "test.db"),
-		DriverName: "sqlite3",
+	testConfig := config.DatabaseConfig{
+		Path:   path.Join(tmpDir, "test.db"),
+		Driver: "sqlite3",
 	}
 
 	client, err := repo.NewDbClient(testConfig)

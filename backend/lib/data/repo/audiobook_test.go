@@ -54,11 +54,11 @@ func TestAudiobookRepository(t *testing.T) {
 
 }
 
-func prepareDatabase(t *testing.T) config.DbConfig {
-	//tmpDir := t.TempDir()
-	testConfig := config.DbConfig{
-		Path:       path.Join("/home/memi/projects/bookplayer/backend/lib/data/repo", "test.db"),
-		DriverName: "sqlite3",
+func prepareDatabase(t *testing.T) config.DatabaseConfig {
+	tmpDir := t.TempDir()
+	testConfig := config.DatabaseConfig{
+		Path:   path.Join(tmpDir, "test.db"),
+		Driver: "sqlite3",
 	}
 
 	if err := repo.ApplyDatabaseMigrations(testConfig); err != nil {

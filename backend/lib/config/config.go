@@ -1,55 +1,78 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Server     ServerConfig     `mapstructure:"server"`
-	Audiobooks AudiobooksConfig `mapstructure:"audiobooks"`
-	Db         DbConfig         `mapstructure:"db"`
+	Port                 int            `json:"port"`
+	AudiobookDirectory   string         `json:"audiobookDirectory"`
+	ScanInterval         time.Duration  `json:"scanInterval"`
+	ApplicationDirectory string         `json:"applicationDirectory"`
+	Database             DatabaseConfig `json:"database"`
 }
 
-type ServerConfig struct {
-	Port int `yaml:"PORT"`
+type DatabaseConfig struct {
+	Migrations string `json:"applicationDirectory"`
+	Path       string `json:"dbPath"`
+	Driver     string `json:"driver"`
 }
 
-type AudiobooksConfig struct {
-	AudibookDirectoryPath string        `mapstructure:"DATA_DIR"`
-	Interval              time.Duration `yaml:"INTERVAL"`
+type intermediateConfig struct {
+	Port                 int            `json:"port"`
+	AudiobookDirectory   string         `json:"audiobookDirectory"`
+	ScanInterval         configDuration `json:"scanInterval"`
+	ApplicationDirectory string         `json:"applicationDirectory"`
+	Database             DatabaseConfig `json:"database"`
 }
 
-type ProcessedAudiobooksConfig struct {
-	ProcessedPath string `mapstructure:"PROCESSED_DIR"`
-}
+type configDuration time.Duration
 
-type DbConfig struct {
-	Path       string `mapstructure:"DATA_SOURCE"`
-	DriverName string `mapstructure:"DRIVER"`
-	Migrations string `mapstructure:"MIGRATIONS"`
-}
-
-func ParseConfig(envPath string) (Config, error) {
-	stat, err := os.Stat(envPath)
+func (c *configDuration) UnmarshalJSON(data []byte) error {
+	var tmp string
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+	duration, err := time.ParseDuration(tmp)
 	if err != nil {
-		return Config{}, err
+		return err
+	}
+	*c = configDuration(duration)
+	return nil
+}
+
+func ParseConfig(configFilePath string) (*Config, error) {
+	stat, err := os.Stat(configFilePath)
+	if err != nil {
+		return nil, err
 	}
 	if stat.IsDir() {
-		return Config{}, fmt.Errorf("path %s does not point to .env file", envPath)
+		return nil, fmt.Errorf("path %s does not point to .env file", configFilePath)
 	}
-	viper.SetConfigFile(envPath)
-	if err := viper.ReadInConfig(); err != nil {
-		return Config{}, err
+
+	configData, err := os.ReadFile(configFilePath)
+	if err != nil {
+		return nil, err
 	}
-	config := Config{}
-	viper.Unmarshal(&config)
-	return config, nil
+	intermediateConfig := intermediateConfig{}
+	if err := json.Unmarshal(configData, &intermediateConfig); err != nil {
+		return nil, err
+	}
+
+	config := Config{
+		Port:                 intermediateConfig.Port,
+		AudiobookDirectory:   intermediateConfig.AudiobookDirectory,
+		ScanInterval:         time.Duration(intermediateConfig.ScanInterval),
+		ApplicationDirectory: intermediateConfig.ApplicationDirectory,
+		Database:             intermediateConfig.Database,
+	}
+
+	return &config, nil
 }
 
 func GetEnvPathFromFlags() (string, error) {

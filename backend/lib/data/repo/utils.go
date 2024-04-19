@@ -8,14 +8,14 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-func ApplyDatabaseMigrations(dbConfig config.DbConfig) error {
-	database, err := sql.Open(dbConfig.DriverName, dbConfig.Path)
+func ApplyDatabaseMigrations(dbConfig config.DatabaseConfig) error {
+	database, err := sql.Open(dbConfig.Driver, dbConfig.Path)
 	if err != nil {
 		return err
 	}
 	defer database.Close()
 	goose.SetBaseFS(db.MigrationsFS)
-	if err := goose.SetDialect(dbConfig.DriverName); err != nil {
+	if err := goose.SetDialect(dbConfig.Driver); err != nil {
 		return err
 	}
 	if err := goose.Up(database, "migrations"); err != nil {

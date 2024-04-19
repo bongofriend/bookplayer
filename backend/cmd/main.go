@@ -27,18 +27,18 @@ func main() {
 	}
 	switch {
 	case len(*args.migrationName) > 0:
-		generateMigration(config.Db, args)
+		generateMigration(config.Database, args)
 	case args.up != nil && *args.up:
 		if *args.down {
 			log.Fatal("Only up or down options allowed")
 		}
-		applyMigrations(config.Db)
+		applyMigrations(config.Database)
 
 	case args.down != nil && *args.down:
 		if *args.up {
 			log.Fatal("Only up or down options allowed")
 		}
-		teardownMigration(config.Db)
+		teardownMigration(config.Database)
 	case len(*args.compileSqlc) > 0:
 		runSqlc(args)
 	}
@@ -61,10 +61,10 @@ func parseFlags() Args {
 	}
 }
 
-func generateMigration(dbConfig config.DbConfig, args Args) {
+func generateMigration(dbConfig config.DatabaseConfig, args Args) {
 	database := connectToDatabase(dbConfig)
 	defer database.Close()
-	if err := goose.SetDialect(dbConfig.DriverName); err != nil {
+	if err := goose.SetDialect(dbConfig.Driver); err != nil {
 		log.Fatal(err)
 	}
 	if err := goose.Create(database, dbConfig.Migrations, *args.migrationName, "sql"); err != nil {
@@ -72,21 +72,21 @@ func generateMigration(dbConfig config.DbConfig, args Args) {
 	}
 }
 
-func connectToDatabase(dbConfig config.DbConfig) *sql.DB {
-	database, err := sql.Open(dbConfig.DriverName, dbConfig.Path)
+func connectToDatabase(dbConfig config.DatabaseConfig) *sql.DB {
+	database, err := sql.Open(dbConfig.Driver, dbConfig.Path)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := goose.SetDialect(dbConfig.DriverName); err != nil {
+	if err := goose.SetDialect(dbConfig.Driver); err != nil {
 		log.Fatal(err)
 	}
 	return database
 }
 
-func applyMigrations(dbConfig config.DbConfig) {
+func applyMigrations(dbConfig config.DatabaseConfig) {
 	database := connectToDatabase(dbConfig)
 	defer database.Close()
-	if err := goose.SetDialect(dbConfig.DriverName); err != nil {
+	if err := goose.SetDialect(dbConfig.Driver); err != nil {
 		log.Fatal(err)
 	}
 	if err := goose.Up(database, dbConfig.Migrations); err != nil {
@@ -94,10 +94,10 @@ func applyMigrations(dbConfig config.DbConfig) {
 	}
 }
 
-func teardownMigration(dbConfig config.DbConfig) {
+func teardownMigration(dbConfig config.DatabaseConfig) {
 	database := connectToDatabase(dbConfig)
 	defer database.Close()
-	if err := goose.SetDialect(dbConfig.DriverName); err != nil {
+	if err := goose.SetDialect(dbConfig.Driver); err != nil {
 		log.Fatal(err)
 	}
 	if err := goose.Down(database, dbConfig.Migrations); err != nil {

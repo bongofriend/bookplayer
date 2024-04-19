@@ -16,10 +16,10 @@ import (
 )
 
 type ChapterSplitter struct {
-	config config.ProcessedAudiobooksConfig
+	config config.Config
 }
 
-func NewChapterSplitter(config config.ProcessedAudiobooksConfig) (*ChapterSplitter, error) {
+func NewChapterSplitter(config config.Config) (*ChapterSplitter, error) {
 	if !ffmpegIsAvailable() {
 		return nil, errors.New("ffmpeg is not available")
 	}
@@ -107,15 +107,15 @@ func (sp ChapterSplitter) Handle(input processing.AudiobookMetadataResult, outpu
 		return fmt.Errorf("%s is not file", p)
 	}
 
-	stat, err = os.Stat(sp.config.ProcessedPath)
+	stat, err = os.Stat(sp.config.ApplicationDirectory)
 	if err != nil {
 		return err
 	}
 	if !stat.IsDir() {
-		return fmt.Errorf("%s already exists as file", sp.config.ProcessedPath)
+		return fmt.Errorf("%s already exists as file", sp.config.ApplicationDirectory)
 	}
 
-	procesedAudiobookPath := path.Join(sp.config.ProcessedPath, audiobook.Title)
+	procesedAudiobookPath := path.Join(sp.config.ApplicationDirectory, audiobook.Title)
 	if err = os.Mkdir(procesedAudiobookPath, 0755); err != nil {
 		return err
 	}

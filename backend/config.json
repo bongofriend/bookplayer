@@ -1,0 +1,12 @@
+{
+    "port": 8080,
+    "audiobookDirectory": "/home/memi/projects/bookplayer/data",
+    "scanInterval": "5m",
+    "applicationDirectory": "/home/memi/projects/bookplayer/processed",
+    "database": {
+        "migrations": "/home/memi/projects/bookplayer/backend/db/migrations",
+        "dbPath": "/home/memi/projects/bookplayer/backend/local.db",
+        "driver": "sqlite3"
+    }
+    
+}

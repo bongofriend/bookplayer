@@ -13,11 +13,11 @@ import (
 )
 
 type DirectoryWatcher struct {
-	config     config.AudiobooksConfig
+	config     config.Config
 	fileHashes map[string]string
 }
 
-func NewDirectoryWatcher(c config.AudiobooksConfig) DirectoryWatcher {
+func NewDirectoryWatcher(c config.Config) DirectoryWatcher {
 	return DirectoryWatcher{
 		fileHashes: make(map[string]string),
 		config:     c,
@@ -40,7 +40,7 @@ func fileCheckSum(p string) (string, error) {
 }
 
 func (d *DirectoryWatcher) Handle(input time.Time, outputChan chan string) error {
-	paths, err := os.ReadDir(d.config.AudibookDirectoryPath)
+	paths, err := os.ReadDir(d.config.AudiobookDirectory)
 	if err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func (d *DirectoryWatcher) Handle(input time.Time, outputChan chan string) error
 			continue
 		}
 		name := p.Name()
-		pathToFile := filepath.Join(d.config.AudibookDirectoryPath, name)
+		pathToFile := filepath.Join(d.config.AudiobookDirectory, name)
 		fileHash, found := d.fileHashes[name]
 		hash, err := fileCheckSum(pathToFile)
 		if err != nil {
@@ -64,5 +64,5 @@ func (d *DirectoryWatcher) Handle(input time.Time, outputChan chan string) error
 }
 
 func (d DirectoryWatcher) Shutdown() {
-	log.Printf("Stopping to watch %s", d.config.AudibookDirectoryPath)
+	log.Printf("Stopping to watch %s", d.config.AudiobookDirectory)
 }

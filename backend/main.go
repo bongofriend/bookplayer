@@ -23,7 +23,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := repo.ApplyDatabaseMigrations(config.Db); err != nil {
+	if err := repo.ApplyDatabaseMigrations(config.Database); err != nil {
 		log.Fatal(err)
 	}
 	//go-staticcheck:ignore

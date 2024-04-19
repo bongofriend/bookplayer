@@ -14,20 +14,20 @@ import (
 
 func TestDirectoryWatcherObserve(t *testing.T) {
 	context, cancel := context.WithCancel(context.Background())
-	testConfig := config.AudiobooksConfig{
-		AudibookDirectoryPath: t.TempDir(),
-		Interval:              2 * time.Second,
+	testConfig := config.Config{
+		AudiobookDirectory: t.TempDir(),
+		ScanInterval:       2 * time.Second,
 	}
 	handler := directorywatcher.NewDirectoryWatcher(testConfig)
 	watcher := processing.NewPipelineComponent[time.Time, string](&handler)
 	doneConsumer := make(chan struct{})
 	doneWatcher := make(chan struct{})
-	ticker := time.NewTicker(testConfig.Interval)
+	ticker := time.NewTicker(testConfig.ScanInterval)
 	watcher.Start(context, ticker.C, doneWatcher)
 
 	testFileName := "test.txt"
 	testFileContent := "Hello from TestFile!"
-	testFilePath := filepath.Join(testConfig.AudibookDirectoryPath, testFileName)
+	testFilePath := filepath.Join(testConfig.AudiobookDirectory, testFileName)
 	expectedFilePathReceived := false
 
 	go func() {
@@ -58,18 +58,18 @@ func TestDirectoryWatcherObserve(t *testing.T) {
 
 func TestDirectoryWatcherUniqueFiles(t *testing.T) {
 	context, cancel := context.WithCancel(context.Background())
-	testConfig := config.AudiobooksConfig{
-		AudibookDirectoryPath: t.TempDir(),
-		Interval:              2 * time.Second,
+	testConfig := config.Config{
+		AudiobookDirectory: t.TempDir(),
+		ScanInterval:       2 * time.Second,
 	}
 	handler := directorywatcher.NewDirectoryWatcher(testConfig)
 	watcher := processing.NewPipelineComponent[time.Time, string](&handler)
 	doneCh := make(chan struct{})
-	ticker := time.NewTicker(testConfig.Interval)
+	ticker := time.NewTicker(testConfig.ScanInterval)
 	watcher.Start(context, ticker.C, doneCh)
 
 	testFileName := "test.txt"
-	testFilePath := filepath.Join(testConfig.AudibookDirectoryPath, testFileName)
+	testFilePath := filepath.Join(testConfig.AudiobookDirectory, testFileName)
 	filePathReceivedCount := 0
 
 	go func() {
@@ -92,7 +92,7 @@ func TestDirectoryWatcherUniqueFiles(t *testing.T) {
 	textToWrite := []string{"Hello", "Hello", "World"}
 	for _, text := range textToWrite {
 		os.WriteFile(testFilePath, []byte(text), 0644)
-		time.Sleep(2 * testConfig.Interval)
+		time.Sleep(2 * testConfig.ScanInterval)
 	}
 
 	cancel()

@@ -23,8 +23,8 @@ func TestChapterSplitter(t *testing.T) {
 	if err := json.Unmarshal([]byte(testJson), &audiobook); err != nil {
 		t.Fatal(err)
 	}
-	config := config.ProcessedAudiobooksConfig{
-		ProcessedPath: t.TempDir(),
+	config := config.Config{
+		ApplicationDirectory: t.TempDir(),
 	}
 	handler, err := chaptersplitter.NewChapterSplitter(config)
 	if err != nil {
@@ -65,7 +65,7 @@ func TestChapterSplitter(t *testing.T) {
 		log.Fatal("no output received")
 	}
 
-	f := path.Join(config.ProcessedPath, result.Title)
+	f := path.Join(config.ApplicationDirectory, result.Title)
 	_, err = os.Stat(f)
 	if os.IsNotExist(err) {
 		log.Fatalf("%s was not found", f)

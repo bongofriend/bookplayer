@@ -13,8 +13,8 @@ type DbClient struct {
 	db      *sql.DB
 }
 
-func NewDbClient(config config.DbConfig) (*DbClient, error) {
-	db, err := sql.Open(config.DriverName, config.Path)
+func NewDbClient(config config.DatabaseConfig) (*DbClient, error) {
+	db, err := sql.Open(config.Driver, config.Path)
 	if err != nil {
 		return nil, err
 	}

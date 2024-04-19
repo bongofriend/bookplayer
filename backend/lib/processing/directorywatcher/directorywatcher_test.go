@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/bongofriend/bookplayer/backend/lib/config"
-	"github.com/bongofriend/bookplayer/backend/lib/processing"
 	"github.com/bongofriend/bookplayer/backend/lib/processing/directorywatcher"
+	"github.com/bongofriend/bookplayer/backend/lib/processing/pipeline"
 )
 
 func TestDirectoryWatcherObserve(t *testing.T) {
@@ -19,7 +19,7 @@ func TestDirectoryWatcherObserve(t *testing.T) {
 		ScanInterval:       2 * time.Second,
 	}
 	handler := directorywatcher.NewDirectoryWatcher(testConfig)
-	watcher := processing.NewPipelineComponent[time.Time, string](&handler)
+	watcher := pipeline.NewPipelineComponent[time.Time, string](&handler)
 	doneConsumer := make(chan struct{})
 	doneWatcher := make(chan struct{})
 	ticker := time.NewTicker(testConfig.ScanInterval)
@@ -63,7 +63,7 @@ func TestDirectoryWatcherUniqueFiles(t *testing.T) {
 		ScanInterval:       2 * time.Second,
 	}
 	handler := directorywatcher.NewDirectoryWatcher(testConfig)
-	watcher := processing.NewPipelineComponent[time.Time, string](&handler)
+	watcher := pipeline.NewPipelineComponent[time.Time, string](&handler)
 	doneCh := make(chan struct{})
 	ticker := time.NewTicker(testConfig.ScanInterval)
 	watcher.Start(context, ticker.C, doneCh)

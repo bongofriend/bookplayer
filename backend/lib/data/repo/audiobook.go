@@ -9,15 +9,20 @@ import (
 	"github.com/bongofriend/bookplayer/backend/lib/models"
 )
 
-type AudiobookRepository struct {
+type AudiobookRepositoryService struct {
 	client *DbClient
 }
 
-func NewAudiobookRepository(client *DbClient) *AudiobookRepository {
-	return &AudiobookRepository{client}
+type AudiobookRepository interface {
+	InsertAudiobook(context context.Context, audiobook models.AudiobookProcessed) (int64, error)
+	GetAudiobookById(context context.Context, id int64) (*models.AudiobookProcessed, error)
 }
 
-func (r *AudiobookRepository) InsertAudiobook(context context.Context, audiobook models.AudiobookProcessed) (int64, error) {
+func NewAudiobookRepository(client *DbClient) *AudiobookRepositoryService {
+	return &AudiobookRepositoryService{client}
+}
+
+func (r *AudiobookRepositoryService) InsertAudiobook(context context.Context, audiobook models.AudiobookProcessed) (int64, error) {
 	tx, err := r.client.db.Begin()
 	if err != nil {
 		return -1, nil
@@ -44,7 +49,7 @@ func (r *AudiobookRepository) InsertAudiobook(context context.Context, audiobook
 	return id, nil
 }
 
-func (r *AudiobookRepository) GetAudiobookById(context context.Context, id int64) (*models.AudiobookProcessed, error) {
+func (r *AudiobookRepositoryService) GetAudiobookById(context context.Context, id int64) (*models.AudiobookProcessed, error) {
 	rows, err := r.client.queries.GetAudiobookById(context, id)
 	if err != nil {
 		return nil, err

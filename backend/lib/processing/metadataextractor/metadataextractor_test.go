@@ -9,6 +9,7 @@ import (
 	"github.com/bongofriend/bookplayer/backend/lib/models"
 	"github.com/bongofriend/bookplayer/backend/lib/processing"
 	"github.com/bongofriend/bookplayer/backend/lib/processing/metadataextractor"
+	"github.com/bongofriend/bookplayer/backend/lib/processing/pipeline"
 )
 
 const (
@@ -23,7 +24,7 @@ func TestNewMetadataExtractor(t *testing.T) {
 
 func TestMetaDataExtractorProcess(t *testing.T) {
 	extractor, _ := metadataextractor.NewMetadataExtractor()
-	component := processing.NewPipelineComponent[string, processing.AudiobookMetadataResult](extractor)
+	component := pipeline.NewPipelineComponent[string, processing.AudiobookMetadataResult](extractor)
 	pathChan := make(chan string)
 	context, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	doneExtractor := make(chan struct{})

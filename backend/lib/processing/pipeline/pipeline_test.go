@@ -1,4 +1,4 @@
-package processing_test
+package pipeline_test
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bongofriend/bookplayer/backend/lib/processing"
+	"github.com/bongofriend/bookplayer/backend/lib/processing/pipeline"
 )
 
 type mockPipelineHandler struct {
@@ -28,7 +28,7 @@ func (m *mockPipelineHandler) Handle(input struct{}, output chan struct{}) error
 
 func TestPipelineComponent(t *testing.T) {
 	mockHandler := &mockPipelineHandler{}
-	component := processing.NewPipelineComponent[struct{}, struct{}](mockHandler)
+	component := pipeline.NewPipelineComponent[struct{}, struct{}](mockHandler)
 	inputChan := make(chan struct{})
 	donePipelineChan := make(chan struct{})
 	doneConsumerChan := make(chan struct{})
@@ -66,5 +66,9 @@ func TestPipelineComponent(t *testing.T) {
 	if !mockHandler.InputReceived {
 		t.Fatal("PipelineComponent did not receive any input to process")
 	}
+}
+
+// TODO
+func TestAudiobookProcessingPipeline(t *testing.T) {
 
 }

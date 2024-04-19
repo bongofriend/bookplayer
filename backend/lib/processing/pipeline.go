@@ -2,12 +2,7 @@ package processing
 
 import (
 	"context"
-	"errors"
 	"log"
-)
-
-var (
-	ErrNoOutputChannel error = errors.New("no output channel available")
 )
 
 type PipelineHandler[Input any, Output any] interface {

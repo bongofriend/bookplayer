@@ -1,4 +1,4 @@
-package metadataextractor
+package processing
 
 import (
 	"bytes"
@@ -10,11 +10,9 @@ import (
 	"strconv"
 
 	"github.com/bongofriend/bookplayer/backend/lib/models"
-	"github.com/bongofriend/bookplayer/backend/lib/processing"
 )
 
 type MetadataExtractor struct {
-	metadataChan chan processing.AudiobookMetadataResult
 }
 
 type Chapter struct {
@@ -66,41 +64,7 @@ func NewMetadataExtractor() (*MetadataExtractor, error) {
 	if !ffprobeIsAvailable() {
 		return nil, errors.New("ffmpeg is not installed or found")
 	}
-	return &MetadataExtractor{
-		metadataChan: make(chan processing.AudiobookMetadataResult),
-	}, nil
-}
-
-func (m MetadataExtractor) Handle(path string, outputChan chan processing.AudiobookMetadataResult) error {
-	filePath := string(path)
-	if stat, err := os.Stat(string(filePath)); err != nil || stat.IsDir() {
-		if err != nil {
-			log.Println(err)
-		}
-	}
-	ffprobeArgs := []string{"-print_format", "json", "-show_format", "-show_chapters", filePath}
-	cmd := exec.Command("ffprobe", ffprobeArgs...)
-	output, err := cmd.Output()
-	if err != nil {
-		return err
-	}
-	ffprobeOutput := AudiobookMetadata{}
-	outputBuffer := bytes.Buffer{}
-	if err := json.Compact(&outputBuffer, output); err != nil {
-		return err
-	}
-	if err := json.Unmarshal(outputBuffer.Bytes(), &ffprobeOutput); err != nil {
-		return err
-	}
-	model, err := ffprobeOutput.AsModel()
-	if err != nil {
-		return err
-	}
-	outputChan <- processing.AudiobookMetadataResult{
-		Audiobook: model,
-		FilePath:  path,
-	}
-	return nil
+	return &MetadataExtractor{}, nil
 }
 
 func ffprobeIsAvailable() bool {
@@ -159,6 +123,46 @@ func (c Chapter) asModel() (models.Chapter, error) {
 	}, nil
 }
 
+func (m MetadataExtractor) ProcessInput(path string, outputChan chan AudiobookMetadataResult) error {
+	filePath := string(path)
+	if stat, err := os.Stat(string(filePath)); err != nil || stat.IsDir() {
+		if err != nil {
+			log.Println(err)
+		}
+	}
+	ffprobeArgs := []string{"-print_format", "json", "-show_format", "-show_chapters", filePath}
+	cmd := exec.Command("ffprobe", ffprobeArgs...)
+	output, err := cmd.Output()
+	if err != nil {
+		return err
+	}
+	ffprobeOutput := AudiobookMetadata{}
+	outputBuffer := bytes.Buffer{}
+	if err := json.Compact(&outputBuffer, output); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(outputBuffer.Bytes(), &ffprobeOutput); err != nil {
+		return err
+	}
+	model, err := ffprobeOutput.AsModel()
+	if err != nil {
+		return err
+	}
+	outputChan <- AudiobookMetadataResult{
+		Audiobook: model,
+		FilePath:  path,
+	}
+	return nil
+}
+
 func (m MetadataExtractor) Shutdown() {
 	log.Println("Shutting down MetadataExtractor")
+}
+
+func (m MetadataExtractor) CommandsToReceive() []PipelineCommandType {
+	return []PipelineCommandType{}
+}
+
+func (m MetadataExtractor) ProcessCommand(cmd PipelineCommand, inputChan chan string, outputChan chan AudiobookMetadataResult) error {
+	return nil
 }

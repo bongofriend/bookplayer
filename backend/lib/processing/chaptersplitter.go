@@ -1,4 +1,4 @@
-package chaptersplitter
+package processing
 
 import (
 	"errors"
@@ -12,7 +12,6 @@ import (
 
 	"github.com/bongofriend/bookplayer/backend/lib/config"
 	"github.com/bongofriend/bookplayer/backend/lib/models"
-	"github.com/bongofriend/bookplayer/backend/lib/processing"
 )
 
 type ChapterSplitter struct {
@@ -37,7 +36,7 @@ func getChapterOutputPathFormat(dirPath string) string {
 	return path.Join(dirPath, "%d.m4b")
 }
 
-func getArgs(input processing.AudiobookMetadataResult, outputPath string) []string {
+func getArgs(input AudiobookMetadataResult, outputPath string) []string {
 	audiobook := input.Audiobook
 	filePath := string(input.FilePath)
 	endTimes := make([]string, len(audiobook.Chapters))
@@ -92,11 +91,11 @@ func extendAudiobook(a models.Audiobook, splitChapterDirPath string, audiobookFi
 	}, nil
 }
 
-func (sp ChapterSplitter) Shutdown() {
+func (c ChapterSplitter) Shutdown() {
 	log.Println("Shutting down ChapterSplitter")
 }
 
-func (sp ChapterSplitter) Handle(input processing.AudiobookMetadataResult, outputChan chan models.AudiobookProcessed) error {
+func (c ChapterSplitter) ProcessInput(input AudiobookMetadataResult, outputChan chan models.AudiobookProcessed) error {
 	p := input.FilePath
 	audiobook := input.Audiobook
 	stat, err := os.Stat(p)
@@ -107,15 +106,15 @@ func (sp ChapterSplitter) Handle(input processing.AudiobookMetadataResult, outpu
 		return fmt.Errorf("%s is not file", p)
 	}
 
-	stat, err = os.Stat(sp.config.ApplicationDirectory)
+	stat, err = os.Stat(c.config.ApplicationDirectory)
 	if err != nil {
 		return err
 	}
 	if !stat.IsDir() {
-		return fmt.Errorf("%s already exists as file", sp.config.ApplicationDirectory)
+		return fmt.Errorf("%s already exists as file", c.config.ApplicationDirectory)
 	}
 
-	procesedAudiobookPath := path.Join(sp.config.ApplicationDirectory, audiobook.Title)
+	procesedAudiobookPath := path.Join(c.config.ApplicationDirectory, audiobook.Title)
 	if err = os.Mkdir(procesedAudiobookPath, 0755); err != nil {
 		return err
 	}
@@ -130,5 +129,13 @@ func (sp ChapterSplitter) Handle(input processing.AudiobookMetadataResult, outpu
 		return err
 	}
 	outputChan <- *processedAudiobook
+	return nil
+}
+
+func (c ChapterSplitter) CommandsToReceive() []PipelineCommandType {
+	return []PipelineCommandType{}
+}
+
+func (c ChapterSplitter) ProcessCommand(cmd PipelineCommand, inputChan chan AudiobookMetadataResult, outputChan chan models.AudiobookProcessed) error {
 	return nil
 }

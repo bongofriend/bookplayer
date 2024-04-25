@@ -1,4 +1,4 @@
-package audiobooksink
+package processing
 
 import (
 	"context"
@@ -23,8 +23,16 @@ func (a AudiobookSink) Shutdown() {
 	log.Println("Shutting down AudiobookSink")
 }
 
-func (a AudiobookSink) Handle(input models.AudiobookProcessed, outputChan chan struct{}) error {
+func (a AudiobookSink) ProcessInput(input models.AudiobookProcessed, outputChan chan struct{}) error {
 	_, err := a.audiobookRepo.InsertAudiobook(context.Background(), input)
 	outputChan <- struct{}{}
 	return err
+}
+
+func (a AudiobookSink) CommandsToReceive() []PipelineCommandType {
+	return []PipelineCommandType{}
+}
+
+func (a AudiobookSink) ProcessCommand(cmd PipelineCommand, inputChan chan models.AudiobookProcessed, outputChan chan struct{}) error {
+	return nil
 }

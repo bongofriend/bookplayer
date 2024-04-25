@@ -1,4 +1,4 @@
-package directorywatcher
+package processing
 
 import (
 	"crypto/sha1"
@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/bongofriend/bookplayer/backend/lib/config"
 )
@@ -39,7 +38,7 @@ func fileCheckSum(p string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func (d *DirectoryWatcher) Handle(input time.Time, outputChan chan string) error {
+func (d *DirectoryWatcher) ProcessInput(input struct{}, outputChan chan string) error {
 	paths, err := os.ReadDir(d.config.AudiobookDirectory)
 	if err != nil {
 		return err
@@ -65,4 +64,17 @@ func (d *DirectoryWatcher) Handle(input time.Time, outputChan chan string) error
 
 func (d DirectoryWatcher) Shutdown() {
 	log.Printf("Stopping to watch %s", d.config.AudiobookDirectory)
+}
+
+func (d DirectoryWatcher) CommandsToReceive() []PipelineCommandType {
+	return []PipelineCommandType{
+		Scan,
+	}
+}
+
+func (d DirectoryWatcher) ProcessCommand(cmd PipelineCommand, inputChan chan struct{}, outputChan chan string) error {
+	if cmd.CmdType != Scan {
+		return nil
+	}
+	return d.ProcessInput(struct{}{}, outputChan)
 }

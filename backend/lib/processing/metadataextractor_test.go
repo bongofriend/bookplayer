@@ -1,4 +1,4 @@
-package metadataextractor_test
+package processing_test
 
 import (
 	"context"
@@ -8,8 +8,6 @@ import (
 
 	"github.com/bongofriend/bookplayer/backend/lib/models"
 	"github.com/bongofriend/bookplayer/backend/lib/processing"
-	"github.com/bongofriend/bookplayer/backend/lib/processing/metadataextractor"
-	"github.com/bongofriend/bookplayer/backend/lib/processing/pipeline"
 )
 
 const (
@@ -17,21 +15,19 @@ const (
 )
 
 func TestNewMetadataExtractor(t *testing.T) {
-	if _, err := metadataextractor.NewMetadataExtractor(); err != nil {
+	if _, err := processing.NewMetadataExtractor(); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestMetaDataExtractorProcess(t *testing.T) {
-	extractor, _ := metadataextractor.NewMetadataExtractor()
-	component := pipeline.NewPipelineComponent[string, processing.AudiobookMetadataResult](extractor)
-	pathChan := make(chan string)
+	extractorHandler, _ := processing.NewMetadataExtractor()
+	extractor := processing.NewPipelineStage[string, processing.AudiobookMetadataResult](extractorHandler)
 	context, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	doneExtractor := make(chan struct{})
 	doneConsumer := make(chan struct{})
 
-	component.Start(context, pathChan, doneExtractor)
-	pathChan <- testfilePath
+	go extractor.Start(context)
+	extractor.InputChan <- testfilePath
 
 	var audiobook *models.Audiobook
 	go func() {
@@ -41,7 +37,7 @@ func TestMetaDataExtractorProcess(t *testing.T) {
 		select {
 		case <-context.Done():
 			return
-		case data := <-component.OutputChan:
+		case data := <-extractor.OutputChan:
 			audiobook = &data.Audiobook
 			return
 		}
@@ -49,7 +45,7 @@ func TestMetaDataExtractorProcess(t *testing.T) {
 
 	<-doneConsumer
 	cancel()
-	<-doneExtractor
+	<-extractor.DoneChan
 
 	if audiobook == nil {
 		log.Fatal("No data received from MetadataExtractor")

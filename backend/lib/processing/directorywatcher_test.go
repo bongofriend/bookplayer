@@ -1,4 +1,4 @@
-package directorywatcher_test
+package processing_test
 
 import (
 	"context"
@@ -8,8 +8,7 @@ import (
 	"time"
 
 	"github.com/bongofriend/bookplayer/backend/lib/config"
-	"github.com/bongofriend/bookplayer/backend/lib/processing/directorywatcher"
-	"github.com/bongofriend/bookplayer/backend/lib/processing/pipeline"
+	"github.com/bongofriend/bookplayer/backend/lib/processing"
 )
 
 func TestDirectoryWatcherObserve(t *testing.T) {
@@ -18,12 +17,24 @@ func TestDirectoryWatcherObserve(t *testing.T) {
 		AudiobookDirectory: t.TempDir(),
 		ScanInterval:       2 * time.Second,
 	}
-	handler := directorywatcher.NewDirectoryWatcher(testConfig)
-	watcher := pipeline.NewPipelineComponent[time.Time, string](&handler)
+	handler := processing.NewDirectoryWatcher(testConfig)
+	watcher := processing.NewPipelineStage[struct{}, string](&handler)
 	doneConsumer := make(chan struct{})
-	doneWatcher := make(chan struct{})
 	ticker := time.NewTicker(testConfig.ScanInterval)
-	watcher.Start(context, ticker.C, doneWatcher)
+
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-context.Done():
+				return
+			case <-ticker.C:
+				watcher.InputChan <- struct{}{}
+			}
+		}
+	}()
+
+	go watcher.Start(context)
 
 	testFileName := "test.txt"
 	testFileContent := "Hello from TestFile!"
@@ -49,7 +60,7 @@ func TestDirectoryWatcherObserve(t *testing.T) {
 	os.WriteFile(testFilePath, []byte(testFileContent), 0666)
 	<-doneConsumer
 	cancel()
-	<-doneWatcher
+	<-watcher.DoneChan
 
 	if !expectedFilePathReceived {
 		t.Fatal("Expected test file path not received")
@@ -62,11 +73,24 @@ func TestDirectoryWatcherUniqueFiles(t *testing.T) {
 		AudiobookDirectory: t.TempDir(),
 		ScanInterval:       2 * time.Second,
 	}
-	handler := directorywatcher.NewDirectoryWatcher(testConfig)
-	watcher := pipeline.NewPipelineComponent[time.Time, string](&handler)
+	handler := processing.NewDirectoryWatcher(testConfig)
+	watcher := processing.NewPipelineStage[struct{}, string](&handler)
 	doneCh := make(chan struct{})
 	ticker := time.NewTicker(testConfig.ScanInterval)
-	watcher.Start(context, ticker.C, doneCh)
+
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-context.Done():
+				return
+			case <-ticker.C:
+				watcher.InputChan <- struct{}{}
+			}
+		}
+	}()
+
+	go watcher.Start(context)
 
 	testFileName := "test.txt"
 	testFilePath := filepath.Join(testConfig.AudiobookDirectory, testFileName)
@@ -96,9 +120,8 @@ func TestDirectoryWatcherUniqueFiles(t *testing.T) {
 	}
 
 	cancel()
-	for i := 0; i < 2; i++ {
-		<-doneCh
-	}
+	<-doneCh
+	<-watcher.DoneChan
 
 	if filePathReceivedCount != 2 {
 		t.Fatalf("Expected %d emissions; received: %d", 2, filePathReceivedCount)

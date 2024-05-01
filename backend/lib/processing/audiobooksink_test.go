@@ -45,6 +45,7 @@ func TestAudiobookSink(t *testing.T) {
 	context, cancel := context.WithCancel(context.Background())
 
 	doneConsumerChan := make(chan struct{})
+	errChan := make(chan error)
 	outputReceived := false
 
 	go func() {
@@ -60,7 +61,7 @@ func TestAudiobookSink(t *testing.T) {
 		}
 	}()
 
-	go sink.Start(context)
+	go sink.Start(context, errChan)
 	sink.InputChan <- audiobook
 
 	<-doneConsumerChan

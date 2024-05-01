@@ -127,7 +127,7 @@ func (m MetadataExtractor) ProcessInput(path string, outputChan chan AudiobookMe
 	filePath := string(path)
 	if stat, err := os.Stat(string(filePath)); err != nil || stat.IsDir() {
 		if err != nil {
-			log.Println(err)
+			return err
 		}
 	}
 	ffprobeArgs := []string{"-print_format", "json", "-show_format", "-show_chapters", filePath}

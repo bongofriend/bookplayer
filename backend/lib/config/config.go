@@ -6,19 +6,25 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"time"
 )
 
+const (
+	processedAudiobookFolder = "processed_audiobook"
+)
+
 type Config struct {
-	Port                 int            `json:"port"`
-	AudiobookDirectory   string         `json:"audiobookDirectory"`
-	ScanInterval         time.Duration  `json:"scanInterval"`
-	ApplicationDirectory string         `json:"applicationDirectory"`
-	Database             DatabaseConfig `json:"database"`
+	Port                   int
+	AudiobookDirectory     string
+	ProcessedAudiobookPath string
+	ScanInterval           time.Duration
+	ApplicationDirectory   string
+	Database               DatabaseConfig
 }
 
 type DatabaseConfig struct {
-	Migrations string `json:"applicationDirectory"`
+	Migrations string `json:"migrations"`
 	Path       string `json:"dbPath"`
 	Driver     string `json:"driver"`
 }
@@ -65,32 +71,33 @@ func ParseConfig(configFilePath string) (*Config, error) {
 	}
 
 	config := Config{
-		Port:                 intermediateConfig.Port,
-		AudiobookDirectory:   intermediateConfig.AudiobookDirectory,
-		ScanInterval:         time.Duration(intermediateConfig.ScanInterval),
-		ApplicationDirectory: intermediateConfig.ApplicationDirectory,
-		Database:             intermediateConfig.Database,
+		Port:                   intermediateConfig.Port,
+		AudiobookDirectory:     intermediateConfig.AudiobookDirectory,
+		ProcessedAudiobookPath: path.Join(intermediateConfig.ApplicationDirectory, processedAudiobookFolder),
+		ScanInterval:           time.Duration(intermediateConfig.ScanInterval),
+		ApplicationDirectory:   intermediateConfig.ApplicationDirectory,
+		Database:               intermediateConfig.Database,
 	}
 
 	return &config, nil
 }
 
 func GetEnvPathFromFlags() (string, error) {
-	var envPath string
-	flag.StringVar(&envPath, "envPath", "", "Path to environment configuration file")
+	var configPath string
+	flag.StringVar(&configPath, "configPath", "", "Path to environment configuration file")
 	flag.Parse()
 
-	if len(envPath) == 0 {
+	if len(configPath) == 0 {
 		return "", errors.New("path to configuration file is not set")
 	}
 
-	stat, err := os.Stat(envPath)
+	stat, err := os.Stat(configPath)
 	if err != nil {
 		return "", err
 	}
 	if stat.IsDir() {
-		return "", fmt.Errorf("path %s does not point to file", envPath)
+		return "", fmt.Errorf("path %s does not point to file", configPath)
 	}
-	return envPath, nil
+	return configPath, nil
 
 }

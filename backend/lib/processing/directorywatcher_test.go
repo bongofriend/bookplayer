@@ -3,6 +3,7 @@ package processing_test
 import (
 	"context"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,13 +14,19 @@ import (
 
 func TestDirectoryWatcherObserve(t *testing.T) {
 	context, cancel := context.WithCancel(context.Background())
+	testDir := t.TempDir()
 	testConfig := config.Config{
-		AudiobookDirectory: t.TempDir(),
-		ScanInterval:       2 * time.Second,
+		AudiobookDirectory:   path.Join(testDir, "audiobooks"),
+		ApplicationDirectory: path.Join(testDir),
+		ScanInterval:         2 * time.Second,
 	}
-	handler := processing.NewDirectoryWatcher(testConfig)
-	watcher := processing.NewPipelineStage[struct{}, string](&handler)
+	handler, err := processing.NewDirectoryWatcher(testConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	watcher := processing.NewPipelineStage[struct{}, string](handler)
 	doneConsumer := make(chan struct{})
+	errChan := make(chan error)
 	ticker := time.NewTicker(testConfig.ScanInterval)
 
 	go func() {
@@ -34,9 +41,9 @@ func TestDirectoryWatcherObserve(t *testing.T) {
 		}
 	}()
 
-	go watcher.Start(context)
+	go watcher.Start(context, errChan)
 
-	testFileName := "test.txt"
+	testFileName := "test.m4b"
 	testFileContent := "Hello from TestFile!"
 	testFilePath := filepath.Join(testConfig.AudiobookDirectory, testFileName)
 	expectedFilePathReceived := false
@@ -69,13 +76,19 @@ func TestDirectoryWatcherObserve(t *testing.T) {
 
 func TestDirectoryWatcherUniqueFiles(t *testing.T) {
 	context, cancel := context.WithCancel(context.Background())
+	testDir := t.TempDir()
 	testConfig := config.Config{
-		AudiobookDirectory: t.TempDir(),
-		ScanInterval:       2 * time.Second,
+		AudiobookDirectory:   path.Join(testDir, "audiobooks"),
+		ApplicationDirectory: path.Join(testDir),
+		ScanInterval:         2 * time.Second,
 	}
-	handler := processing.NewDirectoryWatcher(testConfig)
-	watcher := processing.NewPipelineStage[struct{}, string](&handler)
+	handler, err := processing.NewDirectoryWatcher(testConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	watcher := processing.NewPipelineStage[struct{}, string](handler)
 	doneCh := make(chan struct{})
+	errChan := make(chan error)
 	ticker := time.NewTicker(testConfig.ScanInterval)
 
 	go func() {
@@ -90,9 +103,9 @@ func TestDirectoryWatcherUniqueFiles(t *testing.T) {
 		}
 	}()
 
-	go watcher.Start(context)
+	go watcher.Start(context, errChan)
 
-	testFileName := "test.txt"
+	testFileName := "test.m4b"
 	testFilePath := filepath.Join(testConfig.AudiobookDirectory, testFileName)
 	filePathReceivedCount := 0
 

@@ -1,26 +1,70 @@
 package processing
 
 import (
+	"bytes"
 	"crypto/sha1"
+	"encoding/gob"
 	"encoding/hex"
 	"io"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/bongofriend/bookplayer/backend/lib/config"
 )
+
+const saveFileName = "seen_files"
 
 type DirectoryWatcher struct {
 	config     config.Config
 	fileHashes map[string]string
 }
 
-func NewDirectoryWatcher(c config.Config) DirectoryWatcher {
-	return DirectoryWatcher{
-		fileHashes: make(map[string]string),
-		config:     c,
+func NewDirectoryWatcher(c config.Config) (*DirectoryWatcher, error) {
+	if err := os.MkdirAll(c.AudiobookDirectory, 0777); err != nil {
+		return nil, err
 	}
+	audiobooks, err := loadSeenAudiobooks(c)
+	if err != nil {
+		return nil, err
+	}
+	return &DirectoryWatcher{
+		fileHashes: audiobooks,
+		config:     c,
+	}, nil
+}
+
+func loadSeenAudiobooks(c config.Config) (map[string]string, error) {
+	saveFilePath := path.Join(c.ApplicationDirectory, saveFileName)
+	_, err := os.Stat(saveFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return make(map[string]string), nil
+		}
+		return nil, err
+	}
+	data, err := os.ReadFile(saveFilePath)
+	if err != nil {
+		return nil, err
+	}
+	var seenAudiobooks map[string]string
+	dec := gob.NewDecoder(bytes.NewReader(data))
+	if err := dec.Decode(&seenAudiobooks); err != nil {
+		return nil, err
+	}
+	return seenAudiobooks, nil
+}
+
+func saveSeenAudiobooks(c config.Config, audiobookFiles map[string]string) error {
+	buf := bytes.Buffer{}
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(audiobookFiles); err != nil {
+		return err
+	}
+	saveFilePath := path.Join(c.ApplicationDirectory, saveFileName)
+	err := os.WriteFile(saveFilePath, buf.Bytes(), 0777)
+	return err
 }
 
 func fileCheckSum(p string) (string, error) {
@@ -48,6 +92,9 @@ func (d *DirectoryWatcher) ProcessInput(input struct{}, outputChan chan string) 
 			continue
 		}
 		name := p.Name()
+		if ext := filepath.Ext(name); ext != ".m4b" {
+			continue
+		}
 		pathToFile := filepath.Join(d.config.AudiobookDirectory, name)
 		fileHash, found := d.fileHashes[name]
 		hash, err := fileCheckSum(pathToFile)
@@ -63,7 +110,8 @@ func (d *DirectoryWatcher) ProcessInput(input struct{}, outputChan chan string) 
 }
 
 func (d DirectoryWatcher) Shutdown() {
-	log.Printf("Stopping to watch %s", d.config.AudiobookDirectory)
+	log.Println("Shutting down DirectoryWatcher")
+	saveSeenAudiobooks(d.config, d.fileHashes)
 }
 
 func (d DirectoryWatcher) CommandsToReceive() []PipelineCommandType {

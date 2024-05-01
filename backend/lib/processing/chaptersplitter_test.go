@@ -30,6 +30,8 @@ func TestChapterSplitter(t *testing.T) {
 	}
 	chapterSplitter := processing.NewPipelineStage[processing.AudiobookMetadataResult, models.AudiobookProcessed](handler)
 	doneConsumer := make(chan bool)
+	errChan := make(chan error)
+
 	context, cancel := context.WithCancel(context.Background())
 	var result *models.AudiobookProcessed
 
@@ -47,7 +49,7 @@ func TestChapterSplitter(t *testing.T) {
 		}
 	}()
 
-	go chapterSplitter.Start(context)
+	go chapterSplitter.Start(context, errChan)
 	chapterSplitter.InputChan <- processing.AudiobookMetadataResult{
 		Audiobook: audiobook,
 		FilePath:  testFilePath,

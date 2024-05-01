@@ -43,6 +43,7 @@ func TestPipelineStage(t *testing.T) {
 	mockHandler := &mockPipelineHandler{}
 	stage := processing.NewPipelineStage[struct{}, struct{}](mockHandler)
 	doneConsumerChan := make(chan struct{})
+	errChan := make(chan error)
 
 	context, cancel := context.WithCancel(context.Background())
 
@@ -60,7 +61,7 @@ func TestPipelineStage(t *testing.T) {
 			return
 		}
 	}()
-	go stage.Start(context)
+	go stage.Start(context, errChan)
 	time.Sleep(2 * time.Second)
 	stage.InputChan <- struct{}{}
 
@@ -83,8 +84,9 @@ func TestPipelineStageProcessCommand(t *testing.T) {
 	mockHandler := &mockPipelineHandler{}
 	stage := processing.NewPipelineStage[struct{}, struct{}](mockHandler)
 	context, cancel := context.WithCancel(context.Background())
+	errChan := make(chan error)
 
-	go stage.Start(context)
+	go stage.Start(context, errChan)
 	stage.CommandChan <- processing.PipelineCommand{
 		CmdType: processing.Scan,
 		Payload: struct{}{},

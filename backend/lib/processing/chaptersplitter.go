@@ -22,6 +22,10 @@ func NewChapterSplitter(config config.Config) (*ChapterSplitter, error) {
 	if !ffmpegIsAvailable() {
 		return nil, errors.New("ffmpeg is not available")
 	}
+	if err := os.MkdirAll(config.ProcessedAudiobookPath, 0755); err != nil {
+		return nil, err
+	}
+
 	return &ChapterSplitter{
 		config: config,
 	}, nil
@@ -106,17 +110,14 @@ func (c ChapterSplitter) ProcessInput(input AudiobookMetadataResult, outputChan 
 		return fmt.Errorf("%s is not file", p)
 	}
 
-	stat, err = os.Stat(c.config.ApplicationDirectory)
-	if err != nil {
-		return err
-	}
-	if !stat.IsDir() {
-		return fmt.Errorf("%s already exists as file", c.config.ApplicationDirectory)
-	}
+	procesedAudiobookPath := path.Join(c.config.ProcessedAudiobookPath, audiobook.Title)
 
-	procesedAudiobookPath := path.Join(c.config.ApplicationDirectory, audiobook.Title)
 	if err = os.Mkdir(procesedAudiobookPath, 0755); err != nil {
-		return err
+		if os.IsExist(err) {
+			log.Printf("Found same audiobook at %s; skipping", procesedAudiobookPath)
+		} else {
+			return err
+		}
 	}
 
 	args := getArgs(input, procesedAudiobookPath)

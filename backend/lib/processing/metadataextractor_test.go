@@ -25,8 +25,20 @@ func TestMetaDataExtractorProcess(t *testing.T) {
 	extractor := processing.NewPipelineStage[string, processing.AudiobookMetadataResult](extractorHandler)
 	context, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	doneConsumer := make(chan struct{})
+	errChan := make(chan error)
 
-	go extractor.Start(context)
+	go func() {
+		select {
+		case <-context.Done():
+			return
+		case err := <-errChan:
+			cancel()
+			log.Println(err)
+			return
+		}
+	}()
+
+	go extractor.Start(context, errChan)
 	extractor.InputChan <- testfilePath
 
 	var audiobook *models.Audiobook

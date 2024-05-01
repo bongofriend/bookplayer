@@ -14,6 +14,7 @@ import (
 type Pipeline struct {
 	// Dispatch commands that are fanned out to each stage in pipeline
 	PipelineCommandChan   chan PipelineCommand
+	errChan               chan error
 	stageCommandPipelines []chan PipelineCommand
 	doneChans             []chan struct{}
 }
@@ -44,7 +45,7 @@ func NewPipelineStage[Input any, Output any](handler PipelineStageHandler[Input,
 }
 
 // Start stage for processing
-func (p PipelineStage[Input, Output]) Start(ctx context.Context) {
+func (p PipelineStage[Input, Output]) Start(ctx context.Context, errorChan chan error) {
 	defer func() {
 		p.handler.Shutdown()
 		p.DoneChan <- struct{}{}
@@ -61,7 +62,7 @@ func (p PipelineStage[Input, Output]) Start(ctx context.Context) {
 		// Process from input channel
 		case input := <-p.InputChan:
 			if err := p.handler.ProcessInput(input, p.OutputChan); err != nil {
-				log.Println(err)
+				errorChan <- err
 			}
 		// React to external commands
 		case cmd := <-p.CommandChan:
@@ -69,7 +70,7 @@ func (p PipelineStage[Input, Output]) Start(ctx context.Context) {
 				continue
 			}
 			if err := p.handler.ProcessCommand(cmd, p.InputChan, p.OutputChan); err != nil {
-				log.Println(err)
+				errorChan <- err
 			}
 		}
 	}
@@ -101,6 +102,7 @@ const (
 func NewPipeline() Pipeline {
 	return Pipeline{
 		PipelineCommandChan:   make(chan PipelineCommand),
+		errChan:               make(chan error),
 		stageCommandPipelines: []chan PipelineCommand{},
 		doneChans:             []chan struct{}{},
 	}
@@ -136,59 +138,65 @@ func (p *Pipeline) Start(appContext context.Context, appConfig config.Config, ap
 	}()
 
 	// Stage 1: Watch for directory changes every n seconds (as specfied in config)
-	watcherHandler := NewDirectoryWatcher(appConfig)
-	watcherPipelineStage := NewPipelineStage(&watcherHandler)
+	watcherHandler, err := NewDirectoryWatcher(appConfig)
+	if err != nil {
+		p.errChan <- err
+		return
+	}
+	watcherPipelineStage := NewPipelineStage(watcherHandler)
 	p.stageCommandPipelines = append(p.stageCommandPipelines, watcherPipelineStage.CommandChan)
 	p.doneChans = append(p.doneChans, watcherPipelineStage.DoneChan)
-	go watcherPipelineStage.Start(context)
+	go watcherPipelineStage.Start(context, p.errChan)
 
 	// Stage 2: Extract meta from audiobook file
 	metadataExtractorHandler, err := NewMetadataExtractor()
 	if err != nil {
-		log.Println(err)
+		p.errChan <- err
 		return
 	}
 	metadataExtractorPipelineStage := NewPipelineStage(metadataExtractorHandler)
 	p.stageCommandPipelines = append(p.stageCommandPipelines, metadataExtractorPipelineStage.CommandChan)
 	p.doneChans = append(p.doneChans, metadataExtractorPipelineStage.DoneChan)
-	go metadataExtractorPipelineStage.Start(context)
+	go metadataExtractorPipelineStage.Start(context, p.errChan)
 
 	// Stage 3: Split audiobook into seperate chapter files
 	chapterSplitterHandler, err := NewChapterSplitter(appConfig)
 	if err != nil {
-		log.Println(err)
+		p.errChan <- err
 		return
 	}
 	chapterSplitterPipelineStage := NewPipelineStage(chapterSplitterHandler)
 	p.stageCommandPipelines = append(p.stageCommandPipelines, chapterSplitterPipelineStage.CommandChan)
 	p.doneChans = append(p.doneChans, chapterSplitterPipelineStage.DoneChan)
-	go chapterSplitterPipelineStage.Start(context)
+	go chapterSplitterPipelineStage.Start(context, p.errChan)
 
 	// Stage 4: Insert processed audiobook information to database
 	audiobookSinkHandler := NewAudiobookSink(audiobookRepo)
 	audiobookSinkPipelineStage := NewPipelineStage(audiobookSinkHandler)
 	p.stageCommandPipelines = append(p.stageCommandPipelines, audiobookSinkPipelineStage.CommandChan)
 	p.doneChans = append(p.doneChans, audiobookSinkPipelineStage.DoneChan)
-	go audiobookSinkPipelineStage.Start(context)
+	go audiobookSinkPipelineStage.Start(context, p.errChan)
+	go p.initCommandPipeline(appContext)
 
 	ticker := time.NewTicker(appConfig.ScanInterval)
-	go func() {
-		for {
-			select {
-			case <-context.Done():
-				return
-			case <-ticker.C:
-				watcherPipelineStage.InputChan <- struct{}{}
-			case path := <-watcherPipelineStage.OutputChan:
-				metadataExtractorPipelineStage.InputChan <- path
-			case metaData := <-metadataExtractorPipelineStage.OutputChan:
-				chapterSplitterPipelineStage.InputChan <- metaData
-			case processedAudiobook := <-chapterSplitterPipelineStage.OutputChan:
-				audiobookSinkPipelineStage.InputChan <- processedAudiobook
-			case <-audiobookSinkPipelineStage.OutputChan:
-				continue
-			}
+	for {
+		select {
+		case <-context.Done():
+			return
+		case err := <-p.errChan:
+			log.Println(err)
+			return
+		case <-ticker.C:
+			watcherPipelineStage.InputChan <- struct{}{}
+		case path := <-watcherPipelineStage.OutputChan:
+			metadataExtractorPipelineStage.InputChan <- path
+		case metaData := <-metadataExtractorPipelineStage.OutputChan:
+			chapterSplitterPipelineStage.InputChan <- metaData
+		case processedAudiobook := <-chapterSplitterPipelineStage.OutputChan:
+			audiobookSinkPipelineStage.InputChan <- processedAudiobook
+		case <-audiobookSinkPipelineStage.OutputChan:
+			continue
 		}
-	}()
-	go p.initCommandPipeline(appContext)
+	}
+
 }
